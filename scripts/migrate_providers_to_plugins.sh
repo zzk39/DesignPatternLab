@@ -80,14 +80,14 @@ move_file() {
     # Check if source exists
     if [ ! -f "${src}" ]; then
         echo -e "${YELLOW}⊗${NC} Skipping ${src} (not found)"
-        ((SKIPPED_COUNT++))
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         return
     fi
     
     # Check if destination already exists
     if [ -f "${dst}" ]; then
         echo -e "${YELLOW}⊗${NC} Skipping ${src} (destination already exists)"
-        ((SKIPPED_COUNT++))
+        SKIPPED_COUNT=$((SKIPPED_COUNT + 1))
         return
     fi
     
@@ -100,25 +100,25 @@ move_file() {
         # Use git mv
         if git mv "${src}" "${dst}" 2>/dev/null; then
             echo -e "${GREEN}✓${NC} Moved ${src} -> ${dst}"
-            ((MOVED_COUNT++))
+            MOVED_COUNT=$((MOVED_COUNT + 1))
         else
             # Fallback to regular mv if git mv fails
             if mv "${src}" "${dst}" 2>/dev/null; then
                 echo -e "${GREEN}✓${NC} Moved ${src} -> ${dst} (fallback)"
-                ((MOVED_COUNT++))
+                MOVED_COUNT=$((MOVED_COUNT + 1))
             else
                 echo -e "${RED}✗${NC} Failed to move ${src}"
-                ((FAILED_COUNT++))
+                FAILED_COUNT=$((FAILED_COUNT + 1))
             fi
         fi
     else
         # Use regular mv
         if mv "${src}" "${dst}" 2>/dev/null; then
             echo -e "${GREEN}✓${NC} Moved ${src} -> ${dst}"
-            ((MOVED_COUNT++))
+            MOVED_COUNT=$((MOVED_COUNT + 1))
         else
             echo -e "${RED}✗${NC} Failed to move ${src}"
-            ((FAILED_COUNT++))
+            FAILED_COUNT=$((FAILED_COUNT + 1))
         fi
     fi
 }
