@@ -4,6 +4,8 @@ import com.team20.editor.domain.workspace.WorkspaceState;
 import org.junit.jupiter.api.Test;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 public class PersistenceManagerTest {
@@ -13,13 +15,13 @@ public class PersistenceManagerTest {
         Path tmp = Files.createTempFile("ws", ".json");
         tmp.toFile().deleteOnExit();
 
-        Serializer serializer = new com.team20.editor.infrastructure.persistence.JsonSerializer();
+        Serializer serializer = new JsonSerializer();
         PersistenceManager pm = new PersistenceManager(serializer);
 
         WorkspaceState s = new WorkspaceState();
         s.setActiveEditorName("a.txt");
-        s.setEditorNames(java.util.List.of("a.txt"));
-        java.util.Map<String, Boolean> logMap = java.util.Map.of("a.txt", true);
+        s.setEditorNames(List.of("a.txt"));
+        Map<String, Boolean> logMap = Map.of("a.txt", true);
         s.setLoggingEnabledMap(logMap);
 
         pm.saveWorkspaceState(tmp.toString(), s);
@@ -27,7 +29,7 @@ public class PersistenceManagerTest {
 
         assertNotNull(loaded);
         assertEquals("a.txt", loaded.getActiveEditorName());
-        assertEquals(java.util.List.of("a.txt"), loaded.getEditorNames());
+        assertEquals(List.of("a.txt"), loaded.getEditorNames());
         assertNotNull(loaded.getLoggingEnabledMap());
         assertTrue(loaded.getLoggingEnabledMap().get("a.txt"));
     }
