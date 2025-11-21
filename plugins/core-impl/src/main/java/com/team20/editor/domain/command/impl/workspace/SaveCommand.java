@@ -5,7 +5,6 @@ import com.team20.editor.domain.editor.Editor;
 import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.infrastructure.persistence.PersistenceManager;
 
-import java.lang.reflect.Method;
 import java.nio.file.Paths;
 
 /**
@@ -148,18 +147,11 @@ public class SaveCommand implements Command {
     }
 
     /**
-     * 尝试调用 Editor#setModified(false)（如果存在），以清除已修改标记。
+     * 清除编辑器的修改标记。
      */
     private void clearModifiedFlag(Editor editor) {
-        if (editor == null)
-            return;
-        try {
-            Method m = editor.getClass().getMethod("setModified", boolean.class);
-            m.invoke(editor, false);
-        } catch (NoSuchMethodException ignored) {
-            // 方法不存在，忽略
-        } catch (Exception ignored) {
-            // 调用失败，忽略以保证保存流程不受影响
+        if (editor != null) {
+            editor.setModified(false);
         }
     }
 

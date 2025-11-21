@@ -5,8 +5,6 @@ import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.extension.registry.DefaultCommandRegistry;
 import com.team20.editor.bootstrap.ApplicationContext;
 
-import java.lang.reflect.Method;
-
 /**
  * redo - redo last undone operation.
  *
@@ -28,25 +26,10 @@ public class RedoCommand implements Command {
         }
 
         try {
-            // Try redo(Workspace) first
-            try {
-                Method m = invoker.getClass().getMethod("redo", Workspace.class);
-                m.invoke(invoker, workspace);
-                System.out.println("重做成功");
-                return;
-            } catch (NoSuchMethodException ignored) {
-            }
-
-            // Fallback to no-arg redo()
-            try {
-                Method m2 = invoker.getClass().getMethod("redo");
-                m2.invoke(invoker);
-                System.out.println("重做成功");
-                return;
-            } catch (NoSuchMethodException ignored) {
-            }
-
-            System.out.println("重做操作不可用：CommandInvoker 未实现 redo 方法");
+            invoker.redo(workspace);
+            System.out.println("重做成功");
+        } catch (IllegalStateException e) {
+            System.out.println(e.getMessage());
         } catch (Throwable t) {
             System.out.println("重做失败: " + t.getMessage());
         }

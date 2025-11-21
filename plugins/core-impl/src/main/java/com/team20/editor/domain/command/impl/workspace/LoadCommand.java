@@ -13,8 +13,6 @@ import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.BufferedReader;
 import java.io.StringReader;
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -69,30 +67,7 @@ public class LoadCommand implements Command {
 
             if (createdNew) {
                 // mark editor as modified (so Close/Exit will prompt to save)
-                try {
-                    // try explicit API setModified(boolean)
-                    Method setModified = editor.getClass().getMethod("setModified", boolean.class);
-                    setModified.invoke(editor, true);
-                } catch (NoSuchMethodException ns1) {
-                    try {
-                        // try markModified()
-                        Method mm = editor.getClass().getMethod("markModified");
-                        mm.invoke(editor);
-                    } catch (NoSuchMethodException ns2) {
-                        try {
-                            // fallback: set a boolean field named "modified"
-                            Field f = editor.getClass().getDeclaredField("modified");
-                            f.setAccessible(true);
-                            f.setBoolean(editor, true);
-                        } catch (Throwable ignored) {
-                            // ignore: best-effort marking
-                        }
-                    } catch (Throwable ignored) {
-                        // ignore
-                    }
-                } catch (Throwable ignored) {
-                    // ignore
-                }
+                editor.setModified(true);
 
                 System.out.println("已创建新文件并标记为已修改: " + filepath);
                 try {

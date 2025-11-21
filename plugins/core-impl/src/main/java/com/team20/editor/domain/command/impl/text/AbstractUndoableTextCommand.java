@@ -5,9 +5,6 @@ import com.team20.editor.domain.editor.text.TextEditor;
 import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.extension.registry.DefaultCommandRegistry;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-
 /**
  * Base class for text-editing UndoableCommands.
  *
@@ -96,42 +93,9 @@ public abstract class AbstractUndoableTextCommand implements UndoableCommand {
     }
 
     /**
-     * Try to mark the editor as modified:
-     * 1) try setModified(boolean)
-     * 2) try markModified()
-     * 3) try to set a boolean field named "modified"
-     * All failures are swallowed to avoid raising at runtime.
+     * Mark the editor as modified.
      */
     protected void markEditorModified(TextEditor editor) {
-        try {
-            // try setModified(boolean)
-            try {
-                Method setModified = editor.getClass().getMethod("setModified", boolean.class);
-                setModified.invoke(editor, true);
-                return;
-            } catch (NoSuchMethodException ignored) {
-            }
-
-            // try markModified()
-            try {
-                Method mark = editor.getClass().getMethod("markModified");
-                mark.invoke(editor);
-                return;
-            } catch (NoSuchMethodException ignored) {
-            }
-
-            // try boolean field "modified"
-            try {
-                Field f = editor.getClass().getDeclaredField("modified");
-                f.setAccessible(true);
-                f.setBoolean(editor, true);
-                return;
-            } catch (NoSuchFieldException ignored) {
-            }
-
-            // last resort: if editor has a setState/flags API, skip (avoid assumptions)
-        } catch (Throwable ignored) {
-            // swallow any reflection exceptions
-        }
+        editor.setModified(true);
     }
 }

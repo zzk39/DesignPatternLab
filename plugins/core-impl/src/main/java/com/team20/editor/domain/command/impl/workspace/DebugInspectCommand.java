@@ -6,7 +6,6 @@ import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.bootstrap.ApplicationContext;
 import com.team20.editor.extension.registry.DefaultCommandRegistry;
 
-import java.lang.reflect.Method;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -41,13 +40,10 @@ public class DebugInspectCommand implements Command {
                 System.out.println("Content (head):\n" + snippet);
             }
 
-            // reflectively call isModified() if exists
+            // call isModified() directly
             try {
-                Method m = active.getClass().getMethod("isModified");
-                Object v = m.invoke(active);
-                System.out.println("isModified() => " + String.valueOf(v));
-            } catch (NoSuchMethodException ns) {
-                System.out.println("isModified() not present on editor implementation");
+                boolean modified = active.isModified();
+                System.out.println("isModified() => " + modified);
             } catch (Throwable t) {
                 System.out.println("isModified() invocation failed: " + t.getMessage());
             }
