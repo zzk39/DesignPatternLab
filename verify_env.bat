@@ -1,213 +1,106 @@
 @echo off
-REM ==========================================
-REM Team20 环境验证脚本 - Windows 原生
-REM ==========================================
+REM ==================================================
+REM Team20 环境验证 (Windows 简化版)
+REM 更详细验证可在 bash 中运行 setup_team20_env2.sh
+REM ==================================================
 
-setlocal enabledelayedexpansion
+SETLOCAL ENABLEDELAYEDEXPANSION
+SET "ERRORS=0"
+SET "WARNINGS=0"
 
-echo.
-echo ==========================================
-echo   Team20 环境验证 - Windows
-echo ==========================================
-echo.
+ECHO.
+ECHO ==========================================
+ECHO   Team20 环境验证 (Windows)
+ECHO ==========================================
+ECHO.
 
-set ERRORS=0
-set WARNINGS=0
-
-REM 1. Java 检查
-echo 1. Java 环境检查
-echo ----------------------------------------
-
-where java >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] Java 已安装
-    for /f "tokens=3" %%i in ('java -version 2^>^&1 ^| findstr /C:"version"') do (
-        set JAVA_VER=%%i
-        set JAVA_VER=!JAVA_VER:"=!
-    )
-    echo     版本: !JAVA_VER!
-    
-    if defined JAVA_HOME (
-        echo [OK] JAVA_HOME: %JAVA_HOME%
-    ) else (
-        echo [WARN] JAVA_HOME 未设置
-        echo   建议设置系统环境变量 JAVA_HOME
-        set /a WARNINGS+=1
-    )
-) else (
-    echo [ERROR] Java 未安装
-    echo.
-    echo 安装指南:
-    echo   1. 下载 Adoptium OpenJDK 17: https://adoptium.net/
-    echo   2. 或使用 Scoop: scoop install openjdk17
-    set /a ERRORS+=1
-)
-echo.
-
-REM 2. Maven 检查
-echo 2. Maven 环境检查
-echo ----------------------------------------
-
-if exist "mvnw.cmd" (
-    echo [OK] Maven Wrapper 已配置
-    set MAVEN_CMD=mvnw.cmd
-    call mvnw.cmd --version >nul 2>&1
-    if %errorlevel% equ 0 (
-        for /f "tokens=3" %%i in ('mvnw.cmd --version 2^>^&1 ^| findstr /C:"Apache Maven"') do (
-            echo [OK] Maven 版本: %%i (via Wrapper)
-        )
-    )
-) else (
-    where mvn >nul 2>&1
-    if %errorlevel% equ 0 (
-        echo [OK] 系统 Maven 已安装
-        for /f "tokens=3" %%i in ('mvn --version 2^>^&1 ^| findstr /C:"Apache Maven"') do (
-            echo     版本: %%i
-        )
-        set MAVEN_CMD=mvn
-        echo [WARN] 建议生成 Maven Wrapper
-        echo   mvn wrapper:wrapper -Dmaven=3.9.5
-        set /a WARNINGS+=1
-    ) else (
-        echo [ERROR] Maven 未安装且无 Maven Wrapper
-        echo.
-        echo 安装指南:
-        echo   1. 下载: https://maven.apache.org/download.cgi
-        echo   2. 或使用 Scoop: scoop install maven
-        set /a ERRORS+=1
-    )
-)
-echo.
-
-REM 3. Git 检查
-echo 3. Git 配置检查
-echo ----------------------------------------
-
-where git >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] Git 已安装
-    for /f "tokens=3" %%i in ('git --version') do echo     版本: %%i
-    
-    git config user.name >nul 2>&1
-    if %errorlevel% equ 0 (
-        for /f "delims=" %%i in ('git config user.name') do (
-            echo [OK] Git 用户: %%i
-        )
-    ) else (
-        echo [WARN] Git 用户信息未配置
-        echo   git config --global user.name "Your Name"
-        echo   git config --global user.email "your@email.com"
-        set /a WARNINGS+=1
-    )
-    
-    for /f "tokens=*" %%i in ('git config core.autocrlf 2^>nul') do set AUTOCRLF=%%i
-    if "!AUTOCRLF!"=="true" (
-        echo [OK] 行尾符配置正确 (autocrlf = true)
-    ) else (
-        echo [WARN] Windows 建议设置:
-        echo   git config --global core.autocrlf true
-        set /a WARNINGS+=1
-    )
-) else (
-    echo [ERROR] Git 未安装
-    echo   下载: https://git-scm.com/download/win
-    set /a ERRORS+=1
-)
-echo.
-
-REM 4. 项目文件检查
-echo 4. 项目文件检查
-echo ----------------------------------------
-
-if exist "pom.xml" (
-    echo [OK] pom.xml 存在
-    
-    if defined MAVEN_CMD (
-        !MAVEN_CMD! validate >nul 2>&1
-        if %errorlevel% equ 0 (
-            echo [OK] pom.xml 验证通过
-        ) else (
-            echo [ERROR] pom.xml 验证失败
-            echo   运行查看: !MAVEN_CMD! validate
-            set /a ERRORS+=1
-        )
-    )
-) else (
-    echo [ERROR] pom.xml 不存在
-    set /a ERRORS+=1
+REM 1. Java
+ECHO [CHECK] Java
+WHERE java >NUL 2>&1
+IF ERRORLEVEL 1 (
+  ECHO   ✗ 未检测到 Java
+  SET /A ERRORS+=1
+) ELSE (
+  FOR /F "tokens=*" %%L IN ('java -version 2^>^&1 ^| findstr /i "version"') DO SET "JAVA_LINE=%%L"
+  ECHO   ✓ %JAVA_LINE%
 )
 
-if exist ".gitignore" (
-    echo [OK] .gitignore 存在
-) else (
-    echo [WARN] .gitignore 不存在
-    set /a WARNINGS+=1
+REM 2. Maven / Wrapper
+ECHO [CHECK] Maven / Wrapper
+IF EXIST mvnw.cmd (
+  ECHO   ✓ mvnw.cmd 存在
+) ELSE (
+  WHERE mvn >NUL 2>&1
+  IF ERRORLEVEL 1 (
+    ECHO   ✗ 缺少 mvnw.cmd 且系统未安装 Maven
+    SET /A ERRORS+=1
+  ) ELSE (
+    ECHO   ! 系统 Maven 存在，但缺少 mvnw.cmd (建议生成)
+    SET /A WARNINGS+=1
+  )
 )
 
-if exist ".editorconfig" (
-    echo [OK] .editorconfig 存在
-) else (
-    echo [WARN] .editorconfig 不存在（推荐）
-    set /a WARNINGS+=1
+REM 3. Git
+ECHO [CHECK] Git
+WHERE git >NUL 2>&1
+IF ERRORLEVEL 1 (
+  ECHO   ✗ Git 未安装
+  SET /A ERRORS+=1
+) ELSE (
+  FOR /F "tokens=1-3" %%A IN ('git --version') DO SET "GIT_V=%%C"
+  ECHO   ✓ Git: %GIT_V%
+  FOR /F "usebackq delims=" %%A IN (`git config user.name 2^>NUL`) DO SET "GU=%%A"
+  FOR /F "usebackq delims=" %%A IN (`git config user.email 2^>NUL`) DO SET "GE=%%A"
+  IF "%GU%"=="" (
+    ECHO   ! Git 用户信息未配置
+    SET /A WARNINGS+=1
+  ) ELSE (
+    ECHO   ✓ Git 用户: %GU% ^<%GE%^>
+  )
 )
 
-if exist "src\main\java" (
-    echo [OK] 项目结构存在
-) else (
-    echo [ERROR] 项目结构不完整
-    set /a ERRORS+=1
+REM 4. 项目关键文件
+ECHO [CHECK] 项目文件
+IF EXIST pom.xml (ECHO   ✓ pom.xml) ELSE (ECHO   ✗ pom.xml 缺失 & SET /A ERRORS+=1)
+IF EXIST .editorconfig (ECHO   ✓ .editorconfig) ELSE (ECHO   ! 缺失 .editorconfig & SET /A WARNINGS+=1)
+IF EXIST .gitattributes (ECHO   ✓ .gitattributes) ELSE (ECHO   ! 缺失 .gitattributes & SET /A WARNINGS+=1)
+IF EXIST build.sh (ECHO   ✓ build.sh) ELSE (ECHO   ! 缺失 build.sh & SET /A WARNINGS+=1)
+IF EXIST build.bat (ECHO   ✓ build.bat) ELSE (ECHO   ! 缺失 build.bat & SET /A WARNINGS+=1)
+
+REM 5. workspace/logs
+ECHO [CHECK] 工作区与日志
+IF EXIST .workspace.state (ECHO   ✓ .workspace.state 存在) ELSE (ECHO   ! 尚未生成 .workspace.state)
+FOR /F "delims=" %%L IN ('dir /b /a-d ".?.*.log" 2^>NUL') DO SET "HASLOG=1"
+IF DEFINED HASLOG (
+  ECHO   ✓ 检测到日志文件 (.filename.log)
+) ELSE (
+  ECHO   ! 未发现日志文件
 )
-echo.
 
-REM 5. PowerShell 检查（可选）
-echo 5. 开发工具检查
-echo ----------------------------------------
-
-where powershell >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] PowerShell 可用（推荐使用）
-) else (
-    echo [INFO] PowerShell 不可用
+REM 6. Devcontainer
+ECHO [CHECK] DevContainer
+IF EXIST ".devcontainer\devcontainer.json" (
+  ECHO   ✓ devcontainer.json 存在
+) ELSE (
+  ECHO   ! 缺失 .devcontainer\devcontainer.json (推荐添加)
+  SET /A WARNINGS+=1
 )
 
-where code >nul 2>&1
-if %errorlevel% equ 0 (
-    echo [OK] VS Code 已安装
-) else (
-    echo [INFO] VS Code 未检测到（可选）
-)
-echo.
+ECHO.
+ECHO ==========================================
+ECHO   验证结果
+ECHO ==========================================
+ECHO 错误: %ERRORS%
+ECHO 警告: %WARNINGS%
+ECHO.
 
-REM 总结
-echo.
-echo ==========================================
-echo   验证结果
-echo ==========================================
-echo.
-echo 平台: Windows (原生)
-echo 错误: %ERRORS%
-echo 警告: %WARNINGS%
-echo.
-
-if %ERRORS% equ 0 (
-    echo [SUCCESS] 环境验证通过！
-    echo.
-    echo 下一步操作:
-    if defined MAVEN_CMD (
-        echo   1. 编译: !MAVEN_CMD! clean compile
-        echo   2. 测试: !MAVEN_CMD! test
-        echo   3. 打包: !MAVEN_CMD! package
-        echo   4. 运行: !MAVEN_CMD! exec:java -Dexec.mainClass="com.team20.editor.Main"
-    )
-    echo.
-    echo 提示: 推荐使用 PowerShell 以获得更好体验
-    exit /b 0
-) else (
-    echo [ERROR] 发现 %ERRORS% 个错误
-    echo.
-    echo 修复建议:
-    if !ERRORS! gtr 0 echo   - 检查上述 [ERROR] 项
-    if !WARNINGS! gtr 0 echo   - 建议修复 [WARN] 项
-    exit /b 1
+IF %ERRORS% EQU 0 (
+  ECHO ✓ 环境验证通过
+  ECHO 下一步:
+  ECHO   build.bat run
+  ECHO   mvnw.cmd test
+  EXIT /B 0
+) ELSE (
+  ECHO ✗ 存在需要处理的错误，请修复后重试
+  EXIT /B 1
 )
-EOF
