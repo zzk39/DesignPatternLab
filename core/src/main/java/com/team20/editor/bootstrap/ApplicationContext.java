@@ -9,11 +9,13 @@ import com.team20.editor.extension.spi.editor.EditorProvider;
 import com.team20.editor.extension.spi.serialization.SerializerProvider;
 import com.team20.editor.infrastructure.event.EventBus;
 import com.team20.editor.infrastructure.event.EventPublisher;
+import com.team20.editor.infrastructure.event.EventListener;
 import com.team20.editor.infrastructure.event.SimpleEventBus;
 import com.team20.editor.infrastructure.persistence.Serializer;
 import com.team20.editor.infrastructure.persistence.PersistenceManager;
 import com.team20.editor.monitoring.logging.LogSink;
 import com.team20.editor.monitoring.logging.LogListener;
+import com.team20.editor.extension.spi.statistics.StatisticsService;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,12 +29,7 @@ import java.util.stream.Collectors;
  * 应用程序上下文（严格插件化）
  *
  * 说明：
- * - 不再直接构造任何具体实现（例如 ConsoleLogSink、JsonSerializer、TextEditor 等）。
- * - 运行时通过 ServiceLoader 加载所需的 SPI/实现：
- * - EditorProvider(s) -> 注入 EditorFactory
- * - SerializerProvider -> 获取 Serializer 用于 PersistenceManager
- * - LogSink implementations -> 选择第一个（可改为策略选择）
- * - 严格策略：若任一必需实现缺失，则在构造时抛 IllegalStateException 并中止启动。
+ * - 仅依赖 SPI 接口，通过 ServiceLoader 加载实现（编辑器、序列化、日志、命令、监听器等）。
  */
 public final class ApplicationContext {
 
@@ -47,6 +44,9 @@ public final class ApplicationContext {
     // keep a reference to the log listener so we can inject Workspace later
     private final LogListener logListener;
 
+    // 新增：保存被加载并订阅的 StatisticsService（若存在）
+    private StatisticsService statisticsService = null;
+
     public ApplicationContext() {
         this.eventBus = new SimpleEventBus();
 
@@ -56,8 +56,17 @@ public final class ApplicationContext {
         try {
             this.eventBus.subscribe(listener);
         } catch (Throwable t) {
-            // protect startup if listener fails to initialize — log to stderr but continue
             System.err.println("Warning: LogListener failed to subscribe: " + t.getMessage());
+        }
+
+        // 自动订阅由插件提供的 EventListener
+        try {
+            ServiceLoader<EventListener> evLoader = ServiceLoader.load(EventListener.class);
+            for (EventListener l : evLoader) {
+                this.eventBus.subscribe(l);
+            }
+        } catch (Throwable t) {
+            System.err.println("Warning: Failed to load/subscribe EventListeners: " + t.getMessage());
         }
 
         this.commandRegistry = new AutoLoadingCommandRegistry();
@@ -74,12 +83,11 @@ public final class ApplicationContext {
         loadEditorProviders();
         if (editorProviders.isEmpty()) {
             throw new IllegalStateException(
-                    "没有找到任何 EditorProvider 实现。请确保在类路径中包含至少一个实现并在对应模块的 META-INF/services/com.team20.editor.extension.spi.editor.EditorProvider 中声明实现类。");
+                    "没有找到任何 EditorProvider 实现。请在对应模块的 META-INF/services/com.team20.editor.extension.spi.editor.EditorProvider 中注册。");
         }
         this.editorFactory = new EditorFactory(this.editorProviders);
-        // Register help command so "help" is available through the command registry.
-        // Use an inline Command implementation to avoid depending on external impl
-        // packages
+
+        // 注册 help 命令
         try {
             this.commandRegistry.registerFactory("help", rawArgs -> new com.team20.editor.domain.command.Command() {
                 @Override
@@ -99,6 +107,23 @@ public final class ApplicationContext {
         } catch (Throwable t) {
             System.err.println("Warning: failed to register help command factory: " + t.getMessage());
         }
+
+        // 加载 StatisticsService 插件
+        ServiceLoader<StatisticsService> loader = ServiceLoader.load(StatisticsService.class);
+        StatisticsService foundService = null;
+        for (StatisticsService service : loader) {
+            foundService = service;
+            break;
+        }
+        if (foundService == null) {
+            throw new IllegalStateException(
+                    "必须提供 StatisticsService 插件实现，用于统计编辑时间。");
+        }
+        this.statisticsService = foundService;
+    }
+
+    public StatisticsService getStatisticsService() {
+        return this.statisticsService;
     }
 
     private Serializer loadSerializer() {
@@ -128,22 +153,17 @@ public final class ApplicationContext {
         }
     }
 
-    /**
-     * 创建并返回一个新的 Workspace，同时把事件发布器注入到 Workspace 中。
-     * Optionally loads workspace state from .workspace.state and migrates legacy
-     * .*.log.enabled markers.
-     */
     public Workspace createWorkspace() {
-        Workspace ws = new Workspace();
+        // 使用带 StatisticsService 的 Workspace 构造
+        Workspace ws = new Workspace(this.statisticsService);
         try {
             if (eventBus instanceof EventPublisher) {
                 ws.setEventPublisher((EventPublisher) eventBus);
             }
-        } catch (Throwable t) {
-            // ignore
+        } catch (Throwable ignored) {
         }
 
-        // inject Workspace into LogListener so it can consult runtime flags
+        // 注入 Workspace 到 LogListener
         try {
             if (this.logListener != null) {
                 this.logListener.setWorkspace(ws);
@@ -151,14 +171,11 @@ public final class ApplicationContext {
         } catch (Throwable ignored) {
         }
 
-        // Restore workspace state if available
         try {
             loadWorkspaceState(ws);
         } catch (Throwable t) {
             System.err.println("Warning: Failed to restore workspace state: " + t.getMessage());
         }
-
-        // Perform one-time migration from legacy .*.log.enabled markers
         try {
             migrateLegacyLogMarkers(ws);
         } catch (Throwable t) {
@@ -168,48 +185,30 @@ public final class ApplicationContext {
         return ws;
     }
 
-    /**
-     * Load workspace state from .workspace.state if it exists.
-     */
     private void loadWorkspaceState(Workspace ws) {
         Path stateFile = Path.of(".workspace.state");
-        if (!Files.exists(stateFile)) {
+        if (!Files.exists(stateFile))
             return;
-        }
-
         try {
             WorkspaceState state = persistenceManager.loadWorkspaceState(".workspace.state");
-            if (state != null) {
+            if (state != null)
                 ws.restoreState(state);
-            }
         } catch (IOException e) {
             System.err.println("Warning: Could not load workspace state: " + e.getMessage());
         }
     }
 
-    /**
-     * Migrate legacy .*.log.enabled marker files to workspace logging flags.
-     * This is a one-time migration that imports and deletes the legacy markers.
-     */
     private void migrateLegacyLogMarkers(Workspace ws) {
         try {
             Path currentDir = Path.of(".");
             List<Path> markerFiles = Files.list(currentDir)
-                    .filter(p -> {
-                        String name = p.getFileName().toString();
-                        return name.startsWith(".") && name.endsWith(".log.enabled");
-                    })
+                    .filter(p -> p.getFileName().toString().startsWith(".")
+                            && p.getFileName().toString().endsWith(".log.enabled"))
                     .collect(Collectors.toList());
-
             for (Path marker : markerFiles) {
                 String fileName = marker.getFileName().toString();
-                // Extract the original filename: .filename.log.enabled -> filename
                 String originalFile = fileName.substring(1, fileName.length() - ".log.enabled".length());
-
-                // Enable logging for this file in workspace
                 ws.setLoggingEnabled(originalFile, true);
-
-                // Delete the legacy marker
                 try {
                     Files.deleteIfExists(marker);
                 } catch (IOException e) {
@@ -221,58 +220,52 @@ public final class ApplicationContext {
         }
     }
 
-    /**
-     * Save current workspace state to .workspace.state
-     */
     public void saveWorkspaceState(Workspace ws) throws IOException {
-        if (ws == null) {
+        if (ws == null)
             return;
-        }
         WorkspaceState state = ws.getState();
         persistenceManager.saveWorkspaceState(".workspace.state", state);
     }
 
-    /**
-     * Returns help text for available commands.
-     * This can be used by Main.java and by CLI help command.
-     */
     public String showHelp() {
         StringBuilder sb = new StringBuilder();
         sb.append("========================================\n");
         sb.append("Team20 Text Editor - Available Commands\n");
-        sb.append("========================================\n");
-        sb.append("\n");
+        sb.append("========================================\n\n");
         sb.append("Workspace Commands:\n");
-        sb.append("  load <file>                  - Load file from disk\n");
-        sb.append("  save [file|all]              - Save current/specified/all files\n");
-        sb.append("  init <file> [with-log]       - Create new buffer (with optional '# log' header)\n");
-        sb.append("  close [file]                 - Close current or specified file\n");
-        sb.append("  edit <file>                  - Switch active file\n");
-        sb.append("  editor-list                  - List all open editors\n");
-        sb.append("  dir-tree [path]              - Show directory tree\n");
-        sb.append("  undo                         - Undo last operation\n");
-        sb.append("  redo                         - Redo last undone operation\n");
-        sb.append("  exit                         - Exit program\n");
-        sb.append("\n");
+        sb.append("  load <file>                   - Load file from disk\n");
+        sb.append("  save [file|all]               - Save current/specified/all files\n");
+        sb.append("  init <text|xml> [with-log]    - Create new buffer (text or xml)\n");
+        sb.append("  close [file]                  - Close current or specified file\n");
+        sb.append("  edit <file>                   - Switch active file\n");
+        sb.append("  editor-list                   - List all open editors (with duration)\n");
+        sb.append("  dir-tree [path]               - Show directory tree\n");
+        sb.append("  undo                          - Undo last operation\n");
+        sb.append("  redo                          - Redo last undone operation\n");
+        sb.append("  exit                          - Exit program\n\n");
         sb.append("Text Edit Commands:\n");
-        sb.append("  append \"text\"                - Append text as new line (Undoable)\n");
-        sb.append("  insert line:col \"text\"       - Insert text at position (Undoable)\n");
-        sb.append("  delete line:col length       - Delete characters (Undoable)\n");
-        sb.append("  replace line:col len \"text\"  - Replace text (Undoable)\n");
-        sb.append("  show [start:end]             - Display content\n");
-        sb.append("\n");
-        sb.append("Logging Commands:\n");
-        sb.append("  log-on [file]                - Enable logging\n");
-        sb.append("  log-off [file]               - Disable logging\n");
-        sb.append("  log-show [file]              - Show log file\n");
-        sb.append("\n");
-        sb.append("Other:\n");
-        sb.append("  help                         - Show this help\n");
+        sb.append("  append \"text\"                 - Append text as new line (Undoable)\n");
+        sb.append("  insert line:col \"text\"        - Insert text at position (Undoable)\n");
+        sb.append("  delete line:col length        - Delete characters (Undoable)\n");
+        sb.append("  replace line:col len \"text\"   - Replace text (Undoable)\n");
+        sb.append("  show [start:end]              - Display content\n\n");
+        sb.append("XML Commands (in xml editor):\n");
+        sb.append("  insert-before <tag> <newId> <targetId> [\"text\"]\n");
+        sb.append("  append-child  <tag> <newId> <parentId> [\"text\"]\n");
+        sb.append("  edit-id <oldId> <newId>\n");
+        sb.append("  edit-text <elementId> [\"text\"]\n");
+        sb.append("  delete <elementId>\n");
+        sb.append("  xml-tree [file]\n\n");
+        sb.append("Spell Checking:\n");
+        sb.append("  spell-check [file]            - Check spelling for text or xml\n\n");
+        sb.append("Logging:\n");
+        sb.append("  log-on [file]                 - Enable logging\n");
+        sb.append("  log-off [file]                - Disable logging\n");
+        sb.append("  log-show [file]               - Show log file\n");
         sb.append("========================================\n");
         return sb.toString();
     }
 
-    // Getters
     public EventBus eventBus() {
         return eventBus;
     }
@@ -293,9 +286,6 @@ public final class ApplicationContext {
         return persistenceManager;
     }
 
-    /**
-     * 返回 EditorFactory（通过 SPI 提供 provider）
-     */
     public EditorFactory editorFactory() {
         return editorFactory;
     }
@@ -311,7 +301,6 @@ public final class ApplicationContext {
         for (EditorProvider provider : editorProviders) {
             sb.append("  * ").append(provider.getProviderName()).append("\n");
         }
-        // Only access getProviders() if the registry is AutoLoadingCommandRegistry
         if (commandRegistry instanceof AutoLoadingCommandRegistry) {
             AutoLoadingCommandRegistry autoRegistry = (AutoLoadingCommandRegistry) commandRegistry;
             sb.append("- Command providers: ").append(autoRegistry.getProviders().size()).append("\n");

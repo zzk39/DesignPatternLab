@@ -16,6 +16,22 @@ public class CommandInvoker {
     private final Deque<UndoableCommand> redoStack = new ArrayDeque<>();
 
     /**
+     * 新增：统一执行入口。普通命令只执行；可撤销命令自动入栈。
+     */
+    public synchronized void execute(Command cmd, Workspace workspace) {
+        Objects.requireNonNull(cmd, "cmd");
+        cmd.execute(workspace);
+        if (cmd instanceof UndoableCommand uc) {
+            undoStack.push(uc);
+            redoStack.clear();
+        }
+    }
+
+    /**
+     * 兼容旧调用：执行并记录撤销信息。
+     */
+
+    /**
      * 执行一个可撤销命令并记录用于 undo。
      */
     public synchronized void executeAndRecord(UndoableCommand cmd, Workspace workspace) {

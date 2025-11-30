@@ -18,6 +18,9 @@
         <module>core</module>
         <module>plugins/core-impl</module>
         <module>plugins/cli-jline</module>
+        <module>plugins/spellcheck-simple</module> 
+        <module>plugins/xml-impl</module> 
+        <module>plugins/stats-impl</module> 
     </modules>
     
     <properties>

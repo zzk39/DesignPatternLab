@@ -70,6 +70,12 @@ public class ExitCommand implements Command {
             System.out.println("已关闭: " + name);
         }
 
+        // 发布退出事件（停止所有计时）
+        try {
+            workspace.publishCommandEvent("exit", "");
+        } catch (Throwable ignored) {
+        }
+
         // After closing editors, persist workspace state using
         // PersistenceManager.saveWorkspaceState
         try {

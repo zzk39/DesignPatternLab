@@ -65,6 +65,12 @@ public class LoadCommand implements Command {
             workspace.addEditor(editor);
             workspace.setActiveEditor(editor);
 
+            // 发布编辑器激活事件（用于统计时长）
+            try {
+                workspace.publishCommandEvent("load", filepath);
+            } catch (Throwable ignored) {
+            }
+
             if (createdNew) {
                 // mark editor as modified (so Close/Exit will prompt to save)
                 editor.setModified(true);

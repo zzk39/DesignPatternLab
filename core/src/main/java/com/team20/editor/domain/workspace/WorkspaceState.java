@@ -16,6 +16,9 @@ public class WorkspaceState {
     // value = true/false
     private Map<String, Boolean> loggingEnabledMap;
 
+    // Persist per-editor accumulated durations (seconds)
+    private Map<String, Long> editorDurations;
+
     public WorkspaceState() {
     }
 
@@ -51,6 +54,14 @@ public class WorkspaceState {
         this.loggingEnabledMap = loggingEnabledMap;
     }
 
+    public Map<String, Long> getEditorDurations() {
+        return editorDurations;
+    }
+
+    public void setEditorDurations(Map<String, Long> editorDurations) {
+        this.editorDurations = editorDurations;
+    }
+
     @Override
     public String toString() {
         return "WorkspaceState{" +
@@ -58,6 +69,7 @@ public class WorkspaceState {
                 ", activeEditorName='" + activeEditorName + '\'' +
                 ", editorNames=" + editorNames +
                 ", loggingEnabledMap=" + loggingEnabledMap +
+                ", editorDurations=" + editorDurations +
                 '}';
     }
 }

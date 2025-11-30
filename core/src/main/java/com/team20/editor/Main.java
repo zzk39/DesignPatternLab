@@ -30,8 +30,9 @@ public final class Main {
         try {
             // Initialize ApplicationContext early
             context = new ApplicationContext();
-            
-            // Inject ApplicationContext into registry so plugin factories can access core services
+
+            // Inject ApplicationContext into registry so plugin factories can access core
+            // services
             DefaultCommandRegistry.setApplicationContext(context);
 
             // Create workspace (this loads state and migrates legacy markers)
@@ -58,14 +59,14 @@ public final class Main {
             System.err.println("The application will start in degraded mode.");
             System.err.println("Some features may not be available.");
             System.err.println();
-            
+
             // If context wasn't created, we can't continue
             if (context == null) {
                 System.err.println("FATAL: Could not initialize ApplicationContext.");
                 System.err.println("Please check that all required plugins are installed.");
                 return;
             }
-            
+
             // If workspace wasn't created, try again with minimal setup
             if (workspace == null) {
                 try {
@@ -94,8 +95,11 @@ public final class Main {
                 return;
             } catch (NoSuchMethodException | IllegalAccessException
                     | java.lang.reflect.InvocationTargetException ex) {
-                System.err.println("Optional CLI plugin exists but cannot invoke entry point run(ApplicationContext,Workspace): " + ex.getMessage());
-                System.err.println("Falling back to built-in command loop. To use the enhanced CLI, check plugin compatibility.");
+                System.err.println(
+                        "Optional CLI plugin exists but cannot invoke entry point run(ApplicationContext,Workspace): "
+                                + ex.getMessage());
+                System.err.println(
+                        "Falling back to built-in command loop. To use the enhanced CLI, check plugin compatibility.");
                 // fall back to built-in loop
             }
         } catch (ClassNotFoundException ignored) {
@@ -123,20 +127,13 @@ public final class Main {
                     try {
                         Command exitCommand = DefaultCommandRegistry.getInstance().create("exit", "");
                         if (exitCommand != null) {
-                            if (exitCommand instanceof UndoableCommand uc) {
-                                context.commandInvoker().executeAndRecord(uc, workspace);
-                            } else {
-                                exitCommand.execute(workspace);
-                            }
-                            // ExitCommand should take care of terminating the process (e.g. System.exit).
-                            // If it returns, break as a safeguard (but normally plugin will exit).
+                            context.commandInvoker().execute(exitCommand, workspace);
+                            // ExitCommand 正常应该退出进程；若未退出，作为保护可 break
                             break;
                         } else {
-                            // NO FALLBACK: require plugin-provided exit
                             System.out.println("Error: 'exit' command not found.");
-                            System.out.println("Please ensure a plugin providing the exit command is deployed (e.g., ExitCommand in plugins/core-impl).");
-                            // Do NOT break or exit; continue loop and wait for user to install/enable
-                            // plugin or run an explicit command.
+                            System.out.println(
+                                    "Please ensure a plugin providing the exit command is deployed (e.g., ExitCommand in plugins/core-impl).");
                             continue;
                         }
                     } catch (Throwable t) {
@@ -158,17 +155,14 @@ public final class Main {
 
                 Command command = DefaultCommandRegistry.getInstance().create(commandName, rawArgs);
                 if (command != null) {
-                    if (command instanceof UndoableCommand uc) {
-                        context.commandInvoker().executeAndRecord(uc, workspace);
-                    } else {
-                        command.execute(workspace);
-                    }
+                    // 统一入口：Invoker 内部判断是否是 UndoableCommand 并入栈
+                    context.commandInvoker().execute(command, workspace);
                     continue;
                 }
 
                 System.out.println("Unknown command: " + input);
                 System.out.println("Type 'help' to see available commands");
-                } catch (Exception e) {
+            } catch (Exception e) {
                 System.err.println("Error: " + e.getMessage());
             }
         }

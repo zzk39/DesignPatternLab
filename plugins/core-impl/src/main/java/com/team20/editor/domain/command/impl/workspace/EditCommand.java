@@ -6,12 +6,6 @@ import com.team20.editor.domain.workspace.Workspace;
 
 /**
  * EditCommand: 切换活动文件。
- *
- * 行为修正：
- * - 只允许切换到已经在 workspace 中打开的编辑器。
- * - 若文件未打开，打印 "文件未打开: <file>"（不再尝试从磁盘加载或创建编辑器）。
- *
- * 这符合规范：edit <file> 仅切换活动文件，不负责加载/创建。
  */
 public class EditCommand implements Command {
 
@@ -35,6 +29,13 @@ public class EditCommand implements Command {
         }
 
         workspace.setActiveEditor(existing);
+
+        // 🆕 发布编辑器激活事件（用于统计时长）
+        try {
+            workspace.publishCommandEvent("edit", filepath);
+        } catch (Throwable ignored) {
+        }
+
         System.out.println("切换到已打开文件: " + filepath);
     }
 
