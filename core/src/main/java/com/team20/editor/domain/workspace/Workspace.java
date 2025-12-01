@@ -5,7 +5,6 @@ import com.team20.editor.infrastructure.event.CommandEvent;
 import com.team20.editor.infrastructure.event.EventPublisher;
 import com.team20.editor.infrastructure.event.WorkspaceEvent;
 import com.team20.editor.extension.spi.statistics.StatisticsService;
-import com.team20.editor.bootstrap.ApplicationContext;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -17,9 +16,12 @@ public class Workspace {
     private Editor activeEditor;
     private EventPublisher eventPublisher;
 
+    // 原有：启用日志开关
     private final Map<String, Boolean> loggingEnabled = new HashMap<>();
+    // 新增：每文件排除的命令集合（小写命令名）
+    private final Map<String, Set<String>> loggingExclusions = new HashMap<>();
 
-    // 新增：StatisticsService 引用，用于会话级别编辑时长
+    // 会话级时长统计
     private final StatisticsService statisticsService;
 
     public Workspace() {
@@ -43,16 +45,16 @@ public class Workspace {
             editors.put(filepath, editor);
             editorList.add(editor);
 
-            // 新增：打开文件即重置会话时长
             if (statisticsService != null) {
                 statisticsService.resetDuration(filepath);
             }
         }
 
         loggingEnabled.putIfAbsent(filepath, Boolean.FALSE);
+        loggingExclusions.putIfAbsent(filepath, new HashSet<>());
 
         if (activeEditor == null) {
-            setActiveEditor(editor); // 使用 setActiveEditor 来触发统计
+            setActiveEditor(editor);
         }
     }
 
@@ -62,7 +64,6 @@ public class Workspace {
 
         String filepath = editor.getName();
 
-        // 新增：关闭文件停止统计
         if (statisticsService != null) {
             statisticsService.stopTracking(filepath);
         }
@@ -70,6 +71,7 @@ public class Workspace {
         editors.remove(filepath);
         editorList.remove(editor);
         loggingEnabled.remove(filepath);
+        loggingExclusions.remove(filepath);
 
         if (activeEditor == editor) {
             Editor newActive = editorList.isEmpty() ? null : editorList.get(editorList.size() - 1);
@@ -92,12 +94,10 @@ public class Workspace {
     public void setActiveEditor(Editor editor) {
         if (editor != null && editorList.contains(editor)) {
             if (activeEditor != null && statisticsService != null) {
-                // 停止前一个文件的计时
                 statisticsService.stopTracking(activeEditor.getName());
             }
             activeEditor = editor;
             if (statisticsService != null) {
-                // 开始当前文件计时
                 statisticsService.startTracking(activeEditor.getName());
             }
         }
@@ -137,10 +137,46 @@ public class Workspace {
         if (filepath == null)
             return;
         loggingEnabled.put(filepath, enabled);
+        loggingExclusions.putIfAbsent(filepath, new HashSet<>());
+    }
+
+    // 新增：设置/获取/判定 排除命令
+    public void setLogExclusions(String filepath, Set<String> exclusions) {
+        if (filepath == null)
+            return;
+        if (exclusions == null)
+            exclusions = new HashSet<>();
+        // 统一为小写命令名
+        Set<String> lower = new HashSet<>();
+        for (String s : exclusions)
+            if (s != null)
+                lower.add(s.toLowerCase(Locale.ROOT));
+        loggingExclusions.put(filepath, lower);
+    }
+
+    public Set<String> getLogExclusions(String filepath) {
+        Set<String> s = loggingExclusions.get(filepath);
+        return (s == null) ? Collections.emptySet() : Collections.unmodifiableSet(s);
+    }
+
+    public boolean isCommandExcluded(String filepath, String commandName) {
+        if (filepath == null || commandName == null)
+            return false;
+        Set<String> s = loggingExclusions.get(filepath);
+        return s != null && s.contains(commandName.toLowerCase(Locale.ROOT));
     }
 
     public Map<String, Boolean> getLoggingEnabledMap() {
         return Collections.unmodifiableMap(new HashMap<>(loggingEnabled));
+    }
+
+    public Map<String, Set<String>> getLoggingExclusionsMap() {
+        // 深复制
+        Map<String, Set<String>> copy = new HashMap<>();
+        for (var e : loggingExclusions.entrySet()) {
+            copy.put(e.getKey(), new HashSet<>(e.getValue()));
+        }
+        return Collections.unmodifiableMap(copy);
     }
 
     public WorkspaceState getState() {
@@ -149,6 +185,7 @@ public class Workspace {
         state.setActiveEditorName(activeEditor != null ? activeEditor.getName() : null);
         state.setEditorNames(editorList.stream().map(Editor::getName).collect(Collectors.toList()));
         state.setLoggingEnabledMap(new HashMap<>(loggingEnabled));
+        state.setLoggingExclusionsMap(getLoggingExclusionsMap());
         // editorDurations 不再恢复
         state.setEditorDurations(Collections.emptyMap());
         return state;
@@ -162,6 +199,15 @@ public class Workspace {
         if (map != null) {
             loggingEnabled.clear();
             loggingEnabled.putAll(map);
+        }
+
+        Map<String, Set<String>> ex = state.getLoggingExclusionsMap();
+        if (ex != null) {
+            loggingExclusions.clear();
+            // 统一小写
+            for (var e : ex.entrySet()) {
+                setLogExclusions(e.getKey(), e.getValue());
+            }
         }
 
         String activeName = state.getActiveEditorName();
@@ -185,5 +231,4 @@ public class Workspace {
     public StatisticsService getStatisticsService() {
         return this.statisticsService;
     }
-
 }

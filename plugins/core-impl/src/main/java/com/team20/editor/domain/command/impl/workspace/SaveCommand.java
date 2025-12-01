@@ -5,6 +5,7 @@ import com.team20.editor.domain.editor.Editor;
 import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.infrastructure.persistence.PersistenceManager;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 
 /**
@@ -14,11 +15,13 @@ import java.nio.file.Paths;
  * - 不带参数：保存当前活动编辑器
  * - 参数为 "all"（不区分大小写）：保存所有打开的编辑器
  * - 参数为文件路径：
- * - 如果该路径对应 workspace 中已打开的编辑器（editor.getName() 相等），则保存该编辑器内容到它的路径；
- * - 否则将当前活动编辑器内容保存为指定路径（"另存为" 行为）。
+ *   - 如果该路径对应 workspace 中已打开的编辑器（editor.getName() 相等），则保存该编辑器内容到它的路径；
+ *   - 否则将当前活动编辑器内容保存为指定路径（"另存为" 行为）。
  *
  * 保存成功后会尝试清除编辑器的修改标记（若编辑器实现了 setModified(boolean) 方法）。
- * 现在也会发布 command 事件（workspace.publishCommandEvent）以确保日志能记录 save 操作。
+ * 并发布 command 事件（workspace.publishCommandEvent）以确保日志能记录 save 操作。
+ *
+ * 注意：不再引用 XML 编辑器类型，避免跨模块依赖。XmlEditor 已在其 content() 中自行决定是否还原首行 "# log"。
  */
 public class SaveCommand implements Command {
 
@@ -67,15 +70,16 @@ public class SaveCommand implements Command {
             System.out.println("没有打开的文件");
             return;
         }
-        String target = active.getName();
+        Path target = Paths.get(active.getName());
         try {
-            pm.writeFile(Paths.get(target), active.getContent());
+            String out = composeOutput(active, target);
+            pm.writeFile(target, out);
             clearModifiedFlag(active);
             System.out.println("已保存到: " + target);
-            workspace.publishWorkspaceEvent("fileSaved", target);
+            workspace.publishWorkspaceEvent("fileSaved", target.toString());
             // publish command event so logging records the save
             try {
-                workspace.publishCommandEvent("save", target);
+                workspace.publishCommandEvent("save", target.toString());
             } catch (Throwable ignored) {
             }
         } catch (Exception e) {
@@ -91,14 +95,15 @@ public class SaveCommand implements Command {
         int success = 0;
         int fail = 0;
         for (Editor e : workspace.getEditors()) {
-            String target = e.getName();
+            Path target = Paths.get(e.getName());
             try {
-                pm.writeFile(Paths.get(target), e.getContent());
+                String out = composeOutput(e, target);
+                pm.writeFile(target, out);
                 clearModifiedFlag(e);
                 success++;
                 // publish per-file command event so logging records each save
                 try {
-                    workspace.publishCommandEvent("save", target);
+                    workspace.publishCommandEvent("save", target.toString());
                 } catch (Throwable ignored) {
                 }
             } catch (Exception ex) {
@@ -116,8 +121,10 @@ public class SaveCommand implements Command {
             System.out.println("没有打开的文件可另存为: " + path);
             return;
         }
+        Path target = Paths.get(path);
         try {
-            pm.writeFile(Paths.get(path), active.getContent());
+            String out = composeOutput(active, target);
+            pm.writeFile(target, out);
             // optionally update editor name? We keep original name; this is "save as"
             clearModifiedFlag(active);
             System.out.println("已保存到: " + path);
@@ -132,8 +139,10 @@ public class SaveCommand implements Command {
     }
 
     private void saveEditor(Editor editor, Workspace workspace, String targetPath) {
+        Path target = Paths.get(targetPath);
         try {
-            pm.writeFile(Paths.get(targetPath), editor.getContent());
+            String out = composeOutput(editor, target);
+            pm.writeFile(target, out);
             clearModifiedFlag(editor);
             System.out.println("已保存: " + targetPath);
             workspace.publishWorkspaceEvent("fileSaved", targetPath);
@@ -144,6 +153,16 @@ public class SaveCommand implements Command {
         } catch (Exception e) {
             System.out.println("保存失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 组合输出内容：
+     * - 由具体编辑器提供最终文本（XmlEditor 会在其 content() 中按需补回原始 "# log" 首行）。
+     * - 这里不判断编辑器类型，避免跨模块引用导致编译失败。
+     */
+    private String composeOutput(Editor editor, Path targetPath) {
+        String content = editor.getContent();
+        return content == null ? "" : content;
     }
 
     /**

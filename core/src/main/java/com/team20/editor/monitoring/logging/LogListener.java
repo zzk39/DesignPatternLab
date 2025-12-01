@@ -10,15 +10,10 @@ import java.io.File;
 import java.io.FileWriter;
 import java.time.format.DateTimeFormatter;
 
-/**
- * LogListener:
- * - Writes per-file logs only when Workspace reports logging enabled for that
- * file.
- * - No fallback to marker files or "# log" header.
- */
 public class LogListener implements EventListener {
 
-    private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd HH:mm:ss");
+    private static final DateTimeFormatter FORMATTER = java.time.format.DateTimeFormatter
+            .ofPattern("yyyyMMdd HH:mm:ss");
 
     // injected at runtime by ApplicationContext.createWorkspace(...)
     private Workspace workspace;
@@ -26,10 +21,6 @@ public class LogListener implements EventListener {
     public LogListener() {
     }
 
-    /**
-     * Set workspace instance so LogListener can consult runtime flags.
-     * Called from ApplicationContext.createWorkspace(...)
-     */
     public void setWorkspace(Workspace workspace) {
         this.workspace = workspace;
     }
@@ -47,25 +38,28 @@ public class LogListener implements EventListener {
             ts = java.time.LocalDateTime.now().format(FORMATTER);
         }
 
-        String cmdName = safeString(cmd.getCommandName());
-        String args = safeString(cmd.getArguments());
-        String filepath = safeString(cmd.getFilepath());
-
-        if (filepath.isEmpty()) {
+        String cmdName = safe(cmd.getCommandName());
+        String args = safe(cmd.getArguments());
+        String filepath = safe(cmd.getFilepath());
+        if (filepath.isEmpty())
             return;
-        }
 
-        // Only consult workspace flag; do NOT check marker files or file content.
         boolean enabled = false;
         try {
-            if (workspace != null) {
+            if (workspace != null)
                 enabled = workspace.isLoggingEnabled(filepath);
+        } catch (Throwable ignored) {
+        }
+        if (!enabled)
+            return;
+
+        // 新增：按文件过滤集合跳过
+        try {
+            if (workspace != null && workspace.isCommandExcluded(filepath, cmdName)) {
+                return; // 被排除，不写日志
             }
         } catch (Throwable ignored) {
         }
-
-        if (!enabled)
-            return;
 
         String safeName = new File(filepath).getName();
         File logFile = new File("." + safeName + ".log");
@@ -80,7 +74,7 @@ public class LogListener implements EventListener {
         }
     }
 
-    private static String safeString(String s) {
+    private static String safe(String s) {
         return s == null ? "" : s;
     }
 }

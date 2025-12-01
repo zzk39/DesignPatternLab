@@ -46,16 +46,19 @@ public class XmlEditTextCommand implements UndoableCommand {
             throw new IllegalArgumentException("元素不存在: " + elementId);
         oldText = collectText(el);
         xe.editText(elementId, newText);
+        ws.publishCommandEvent("edit-text", elementId + (newText != null ? " \"" + newText + "\"" : ""));
         System.out.println("OK");
     }
 
     @Override
     public void undo(Workspace ws) {
         requireXml(ws).editText(elementId, oldText);
+        ws.publishCommandEvent("undo", "edit-text");
     }
 
     @Override
     public void redo(Workspace ws) {
         requireXml(ws).editText(elementId, newText);
+        ws.publishCommandEvent("redo", "edit-text");
     }
 }

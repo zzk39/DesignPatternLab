@@ -26,16 +26,19 @@ public class XmlDeleteCommand implements UndoableCommand {
         XmlEditor xe = requireXml(ws);
         beforeSnapshot = xe.getContent();
         xe.delete(elementId);
+        ws.publishCommandEvent("xml-delete", elementId);
         System.out.println("OK");
     }
 
     @Override
     public void undo(Workspace ws) {
         requireXml(ws).loadContent(beforeSnapshot);
+        ws.publishCommandEvent("undo", "xml-delete");
     }
 
     @Override
     public void redo(Workspace ws) {
         requireXml(ws).delete(elementId);
+        ws.publishCommandEvent("redo", "xml-delete");
     }
 }

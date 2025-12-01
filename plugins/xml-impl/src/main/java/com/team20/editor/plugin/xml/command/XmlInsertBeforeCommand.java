@@ -5,9 +5,6 @@ import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.domain.editor.Editor;
 import com.team20.editor.domain.editor.xml.XmlEditor;
 
-/**
- * insert-before <tag> <newId> <targetId> ["text"]
- */
 public class XmlInsertBeforeCommand implements UndoableCommand {
     private final String tag;
     private final String newId;
@@ -32,15 +29,21 @@ public class XmlInsertBeforeCommand implements UndoableCommand {
     @Override
     public void execute(Workspace ws) {
         requireXml(ws).insertBefore(tag, newId, targetId, text);
+        String args = String.format("%s %s %s%s", tag, newId, targetId, text != null ? " \"" + text + "\"" : "");
+        ws.publishCommandEvent("insert-before", args);
     }
 
     @Override
     public void undo(Workspace ws) {
         requireXml(ws).delete(newId);
+        // 记录撤销的原命令名
+        ws.publishCommandEvent("undo", "insert-before");
     }
 
     @Override
     public void redo(Workspace ws) {
         requireXml(ws).insertBefore(tag, newId, targetId, text);
+        // 记录重做的原命令名
+        ws.publishCommandEvent("redo", "insert-before");
     }
 }

@@ -2,6 +2,7 @@ package com.team20.editor.domain.workspace;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * WorkspaceState - lightweight DTO for persisting workspace metadata.
@@ -12,11 +13,13 @@ public class WorkspaceState {
     private String activeEditorName;
     private List<String> editorNames;
 
-    // Persist per-editor flags (e.g. logging enabled). key = editor name/path,
-    // value = true/false
+    // 每文件：是否启用日志
     private Map<String, Boolean> loggingEnabledMap;
 
-    // Persist per-editor accumulated durations (seconds)
+    // 新增：每文件：被排除的命令集合（小写命令名）
+    private Map<String, Set<String>> loggingExclusionsMap;
+
+    // 持久化会话累计时长（当前实现不恢复）
     private Map<String, Long> editorDurations;
 
     public WorkspaceState() {
@@ -54,6 +57,14 @@ public class WorkspaceState {
         this.loggingEnabledMap = loggingEnabledMap;
     }
 
+    public Map<String, Set<String>> getLoggingExclusionsMap() {
+        return loggingExclusionsMap;
+    }
+
+    public void setLoggingExclusionsMap(Map<String, Set<String>> loggingExclusionsMap) {
+        this.loggingExclusionsMap = loggingExclusionsMap;
+    }
+
     public Map<String, Long> getEditorDurations() {
         return editorDurations;
     }
@@ -69,6 +80,7 @@ public class WorkspaceState {
                 ", activeEditorName='" + activeEditorName + '\'' +
                 ", editorNames=" + editorNames +
                 ", loggingEnabledMap=" + loggingEnabledMap +
+                ", loggingExclusionsMap=" + loggingExclusionsMap +
                 ", editorDurations=" + editorDurations +
                 '}';
     }

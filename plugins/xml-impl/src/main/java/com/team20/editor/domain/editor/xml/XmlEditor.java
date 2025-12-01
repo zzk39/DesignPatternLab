@@ -20,6 +20,10 @@ public class XmlEditor extends AbstractEditor {
     private Document doc;
     private final Map<String, Element> byId = new HashMap<>();
 
+    // 记录首行日志头是否存在，以及其原始文本（由 loadContent 捕获）
+    private boolean headerPresent = false;
+    private String originalHeaderLine = null;
+
     public XmlEditor(String name) {
         super(name);
         setModified(false);
@@ -27,13 +31,32 @@ public class XmlEditor extends AbstractEditor {
 
     @Override
     protected String content() {
-        return serialize();
+        // 如果文件原本就带 # log 头，则在返回内容时补回原始首行
+        String xml = serialize();
+        if (headerPresent && originalHeaderLine != null && !originalHeaderLine.isBlank()) {
+            // 避免重复：若序列化出的内容首行已是 '#'
+            String first = firstLine(xml);
+            if (first != null && first.trim().startsWith("#")) {
+                return xml;
+            }
+            return originalHeaderLine + "\n" + xml;
+        }
+        return xml;
+    }
+
+    private String firstLine(String s) {
+        if (s == null)
+            return null;
+        int nl = s.indexOf('\n');
+        return (nl >= 0) ? s.substring(0, nl) : s;
     }
 
     @Override
     public void loadContent(String content) {
         try {
-            if (content == null || content.isBlank()) {
+            // 允许首行 '# log ...'，剥离后再解析，并记录原始头部
+            String effective = normalizeContentAndCaptureHeader(content);
+            if (effective == null || effective.isBlank()) {
                 String init = """
                         <?xml version="1.0" encoding="UTF-8"?>
                         <root id="root">
@@ -41,12 +64,49 @@ public class XmlEditor extends AbstractEditor {
                         """;
                 parse(init);
             } else {
-                parse(content);
+                parse(effective);
             }
             setModified(false);
         } catch (Exception e) {
             throw new IllegalArgumentException("XML 解析失败: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 规范化内容并捕获首行日志头：
+     * 1. 去除 UTF-8 BOM
+     * 2. 若首行以 '#' 开头（# log 或 # log -e ...），记录 originalHeaderLine 并剥离首行
+     */
+    private String normalizeContentAndCaptureHeader(String raw) {
+        headerPresent = false;
+        originalHeaderLine = null;
+
+        if (raw == null)
+            return null;
+        String s = stripBom(raw);
+        int nl = s.indexOf('\n');
+        if (nl >= 0) {
+            String first = s.substring(0, nl).trim();
+            if (first.startsWith("#")) {
+                headerPresent = true;
+                originalHeaderLine = first;
+                return s.substring(nl + 1);
+            }
+        } else {
+            // 单行文件且以 # 开头，剥离后为空
+            if (s.trim().startsWith("#")) {
+                headerPresent = true;
+                originalHeaderLine = s.trim();
+                return "";
+            }
+        }
+        return s;
+    }
+
+    private String stripBom(String s) {
+        if (s.startsWith("\uFEFF"))
+            return s.substring(1);
+        return s;
     }
 
     private void parse(String xml) throws Exception {
@@ -108,6 +168,15 @@ public class XmlEditor extends AbstractEditor {
         return byId.get(id);
     }
 
+    // 供其他插件查询（若需要）
+    public boolean hasLoggingHeaderPresent() {
+        return headerPresent;
+    }
+
+    public String getOriginalLogHeaderLine() {
+        return originalHeaderLine;
+    }
+
     public void insertBefore(String tag, String newId, String targetId, String text) {
         if (byId.containsKey(newId))
             throw new IllegalArgumentException("元素ID已存在: " + newId);
@@ -159,7 +228,6 @@ public class XmlEditor extends AbstractEditor {
         Element el = byId.get(id);
         if (el == null)
             throw new IllegalArgumentException("元素不存在: " + id);
-
         NodeList children = el.getChildNodes();
         for (int i = children.getLength() - 1; i >= 0; i--) {
             Node n = children.item(i);

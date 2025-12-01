@@ -29,16 +29,20 @@ public class XmlAppendChildCommand implements UndoableCommand {
     @Override
     public void execute(Workspace ws) {
         requireXml(ws).appendChild(tag, newId, parentId, text);
+        String args = String.format("%s %s %s%s", tag, newId, parentId, text != null ? " \"" + text + "\"" : "");
+        ws.publishCommandEvent("append-child", args);
         System.out.println("OK");
     }
 
     @Override
     public void undo(Workspace ws) {
         requireXml(ws).delete(newId);
+        ws.publishCommandEvent("undo", "append-child");
     }
 
     @Override
     public void redo(Workspace ws) {
         requireXml(ws).appendChild(tag, newId, parentId, text);
+        ws.publishCommandEvent("redo", "append-child");
     }
 }

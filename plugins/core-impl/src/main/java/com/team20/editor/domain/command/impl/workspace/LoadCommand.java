@@ -15,20 +15,8 @@ import java.io.BufferedReader;
 import java.io.StringReader;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.*;
 
-/**
- * LoadCommand: loads a file from persistence and adds editor to workspace.
- *
- * Behaviour:
- * - loads file content into an Editor and makes it active
- * - if file does not exist -> create a new editor with empty content and mark
- * it as modified (unsaved)
- * - if the first non-empty line equals "# log", enable runtime logging for this
- * file
- * via workspace.setLoggingEnabled(...) (no marker files), append a
- * session-start
- * line into .<name>.log and persist workspace state (best-effort)
- */
 public class LoadCommand implements Command {
 
     private final EditorFactory editorFactory;
@@ -47,15 +35,11 @@ public class LoadCommand implements Command {
         boolean createdNew = false;
         String content = "";
         try {
-            // try to load content; if file not found or cannot be read, we'll treat as new
-            // file
             try {
                 content = persistenceManager.load(filepath);
                 if (content == null)
                     content = "";
             } catch (Exception loadEx) {
-                // Treat any load failure as "file not present / unreadable" -> create new
-                // editor
                 createdNew = true;
                 content = "";
             }
@@ -65,16 +49,13 @@ public class LoadCommand implements Command {
             workspace.addEditor(editor);
             workspace.setActiveEditor(editor);
 
-            // 发布编辑器激活事件（用于统计时长）
             try {
                 workspace.publishCommandEvent("load", filepath);
             } catch (Throwable ignored) {
             }
 
             if (createdNew) {
-                // mark editor as modified (so Close/Exit will prompt to save)
                 editor.setModified(true);
-
                 System.out.println("已创建新文件并标记为已修改: " + filepath);
                 try {
                     workspace.publishWorkspaceEvent("fileCreated", filepath);
@@ -84,31 +65,32 @@ public class LoadCommand implements Command {
                 System.out.println("已加载文件: " + filepath);
             }
 
-            // Detect first non-empty line. If equals "# log", enable runtime logging.
+            // 解析首行 "# log ..." 增强：支持 -e <cmd> 过滤
             boolean enableLog = false;
-            if (content != null && !content.isBlank()) {
-                try (BufferedReader br = new BufferedReader(new StringReader(content))) {
-                    String line;
-                    while ((line = br.readLine()) != null) {
-                        if (line != null && !line.isBlank()) {
-                            if (line.trim().equals("# log")) {
-                                enableLog = true;
-                            }
-                            break;
-                        }
-                    }
-                } catch (Throwable ignored) {
+            Set<String> excludes = new HashSet<>();
+            String firstNonEmpty = firstNonEmptyLine(content);
+
+            if (firstNonEmpty != null && firstNonEmpty.startsWith("#")) {
+                String trimmed = firstNonEmpty.trim();
+                if (trimmed.startsWith("# log")) {
+                    enableLog = true;
+                    // 解析参数：# log -e cmd1 -e cmd2 ...
+                    excludes = parseLogExclusions(trimmed);
+                    // 校验命令存在性（不存在则忽略并告警）
+                    excludes = validateExclusions(excludes);
                 }
             }
 
             if (enableLog) {
-                // update centralized workspace flag (no marker files)
                 try {
                     workspace.setLoggingEnabled(filepath, true);
                 } catch (Throwable ignored) {
                 }
+                try {
+                    workspace.setLogExclusions(filepath, excludes);
+                } catch (Throwable ignored) {
+                }
 
-                // append session start line to the per-file log
                 String safeName = new File(filepath).getName();
                 File logFile = new File("." + safeName + ".log");
                 try (PrintWriter pw = new PrintWriter(new FileWriter(logFile, true))) {
@@ -118,7 +100,6 @@ public class LoadCommand implements Command {
                     System.err.println("Warning: 无法写入 session start 到日志文件: " + le.getMessage());
                 }
 
-                // persist workspace state (best-effort)
                 try {
                     ApplicationContext ctx = DefaultCommandRegistry.getApplicationContext();
                     if (ctx != null && ctx.persistenceManager() != null) {
@@ -128,11 +109,63 @@ public class LoadCommand implements Command {
                     System.err.println("Warning: 无法持久化工作区状态: " + le.getMessage());
                 }
 
-                System.out.println("日志已启用: " + "." + safeName + ".log");
+                System.out.println("日志已启用: " + "." + safeName + ".log"
+                        + (excludes.isEmpty() ? "" : "，已排除命令: " + excludes));
             }
 
         } catch (Exception ex) {
             System.out.println("加载失败: " + ex.getMessage());
         }
+    }
+
+    private static String firstNonEmptyLine(String content) {
+        if (content == null || content.isBlank())
+            return null;
+        try (BufferedReader br = new BufferedReader(new StringReader(content))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                if (line != null && !line.isBlank())
+                    return line;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    private static Set<String> parseLogExclusions(String header) {
+        // header 形如： "# log -e append -e delete"
+        // 简单以空白分隔：忽略未知参数（仅提取 -e 后的一个 token）
+        String[] tokens = header.split("\\s+");
+        Set<String> out = new HashSet<>();
+        for (int i = 0; i < tokens.length; i++) {
+            if ("-e".equals(tokens[i]) && i + 1 < tokens.length) {
+                String cmd = tokens[i + 1];
+                if (cmd != null && !cmd.isBlank()) {
+                    out.add(cmd.trim().toLowerCase(Locale.ROOT));
+                }
+                i++; // 跳过参数
+            }
+        }
+        return out;
+    }
+
+    private static Set<String> validateExclusions(Set<String> excludes) {
+        if (excludes == null || excludes.isEmpty())
+            return Collections.emptySet();
+        Set<String> ok = new HashSet<>();
+        for (String cmd : excludes) {
+            try {
+                var reg = DefaultCommandRegistry.getInstance();
+                boolean exists = reg != null && reg.hasCommand(cmd);
+                if (exists)
+                    ok.add(cmd);
+                else
+                    System.err.println("Warning: 日志过滤中包含未知命令: " + cmd);
+            } catch (Throwable t) {
+                // 容错：注册表不可用时，不中断，仅保留原值
+                ok.add(cmd);
+            }
+        }
+        return ok;
     }
 }

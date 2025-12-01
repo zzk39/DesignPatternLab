@@ -25,16 +25,19 @@ public class XmlEditIdCommand implements UndoableCommand {
     @Override
     public void execute(Workspace ws) {
         requireXml(ws).editId(oldId, newId);
+        ws.publishCommandEvent("edit-id", oldId + " " + newId);
         System.out.println("OK");
     }
 
     @Override
     public void undo(Workspace ws) {
         requireXml(ws).editId(newId, oldId);
+        ws.publishCommandEvent("undo", "edit-id");
     }
 
     @Override
     public void redo(Workspace ws) {
         requireXml(ws).editId(oldId, newId);
+        ws.publishCommandEvent("redo", "edit-id");
     }
 }

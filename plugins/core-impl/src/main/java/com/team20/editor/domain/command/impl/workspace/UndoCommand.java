@@ -5,14 +5,6 @@ import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.extension.registry.DefaultCommandRegistry;
 import com.team20.editor.bootstrap.ApplicationContext;
 
-/**
- * undo - undo last undoable operation.
- *
- * This command uses the ApplicationContext.commandInvoker() to perform undo.
- * It attempts to call undo(Workspace) if available; otherwise falls back to
- * undo().
- * Provides user-friendly messages when undo is not available.
- */
 public class UndoCommand implements Command {
 
     @Override

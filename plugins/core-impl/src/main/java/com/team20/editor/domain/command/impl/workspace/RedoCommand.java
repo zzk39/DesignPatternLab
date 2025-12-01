@@ -5,11 +5,6 @@ import com.team20.editor.domain.workspace.Workspace;
 import com.team20.editor.extension.registry.DefaultCommandRegistry;
 import com.team20.editor.bootstrap.ApplicationContext;
 
-/**
- * redo - redo last undone operation.
- *
- * Similar strategy to UndoCommand: attempt redo(Workspace) then redo().
- */
 public class RedoCommand implements Command {
 
     @Override
