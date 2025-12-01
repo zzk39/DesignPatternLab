@@ -391,13 +391,25 @@ DesignPatternLab/
 │       │   │   ├── editor/         # 编辑器接口和实现
 │       │   │   └── workspace/      # 工作区管理
 │       │   ├── extension/          # 扩展点和 SPI
-│       │   ├── infrastructure/     # 基础设施（事件、持久化）
-│       │   ├── monitoring/         # 日志和监控
+│       │   │   ├── registry/       # 命令注册表
+│       │   │   └── spi/            # 服务提供者接口
+│       │   ├── infrastructure/     # 基础设施
+│       │   │   ├── event/          # 事件系统
+│       │   │   └── persistence/    # 持久化
+│       │   ├── monitoring/         # 监控模块
+│       │   │   └── logging/        # 日志记录
+│       │   ├── representation/     # 表示层
+│       │   │   ├── tree/           # 树形视图
+│       │   │   └── ui/             # UI组件
+│       │   ├── util/               # 工具类
 │       │   └── Main.java           # 程序入口
 │       └── test/                   # 单元测试
 ├── plugins/                        # 插件模块
+│   ├── cli-jline/                  # JLine CLI 插件
 │   ├── core-impl/                  # 核心命令实现
-│   └── cli-jline/                  # JLine CLI 插件
+│   ├── spellcheck-simple/          # 拼写检查模块
+│   ├── stats-impl/                 # 统计模块实现
+│   └── xml-impl/                   # XML编辑器实现
 ├── README.md                       # 本文档
 ├── pom.xml                         # Maven 项目配置
 └── build.sh / build.bat           # 构建脚本
