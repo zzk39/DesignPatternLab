@@ -4,18 +4,24 @@ For course: *Advanced Software Development Techniques 25*
 # Team20 Text Editor
 
 > Command-line modular text editor | Design Patterns Practice Project  
-> **Team**: Team20 | **Maintainer**: @team20 | **Updated**: 2025-11-21
+> **Team**: Team20 | **Maintainer**: @team20 | **Updated**: 2025-12-01
 
 ---
 
-## 📋 Lab1 功能概述
+## 📋 Lab2 功能概述
 
-Lab1 实现了一个**基于命令行的文本编辑器**，支持以下核心功能：
+Lab2 在 Lab1 基础上实现了一个**基于命令行的多文件编辑器**，包含**纯文本编辑器**与**XML编辑器**两类，并增加**编辑时长统计**、**拼写检查**两大模块。
 
-- **工作区管理**：支持同时打开多个文本文件，管理活动文件和编辑器状态
+### 核心功能
+
+- **工作区管理**：支持同时打开多个文本文件和XML文件，管理活动文件和编辑器状态
 - **文本编辑**：基本的文本编辑操作（追加、插入、删除、替换、显示）
+- **XML编辑**：支持元素级编辑操作（插入元素、追加子元素、修改元素ID、修改元素文本、删除元素）
+- **XML树形显示**：支持树形结构可视化输出
 - **撤销/重做**：支持编辑操作的撤销和重做
-- **日志记录**：可选的命令执行日志，支持 `.filename.log` 格式
+- **编辑时长统计**：记录每个文件在当前会话中的编辑时长
+- **拼写检查**：扫描文档文本内容并输出拼写错误报告
+- **日志记录**：可选的命令执行日志，支持 `.filename.log` 格式，支持日志过滤
 - **状态持久化**：工作区状态自动保存到 `.workspace.state`，下次启动时恢复
 
 ---
@@ -75,10 +81,10 @@ mvn test -pl plugins/core-impl
 |------|------|------|
 | `load <file>` | 加载文件 | `load test.txt` |
 | `save [file\|all]` | 保存文件 | `save` / `save test.txt` / `save all` |
-| `init <file> [with-log]` | 创建新缓冲区 | `init new.txt` / `init log.txt with-log` |
+| `init <text\|xml> [with-log]` | 创建新缓冲区 | `init text` / `init xml with-log` |
 | `close [file]` | 关闭文件 | `close` / `close test.txt` |
 | `edit <file>` | 切换活动文件 | `edit test.txt` |
-| `editor-list` | 显示文件列表 | `editor-list` |
+| `editor-list` | 显示文件列表（含时长） | `editor-list` |
 | `dir-tree [path]` | 显示目录树 | `dir-tree` / `dir-tree src` |
 | `undo` | 撤销 | `undo` |
 | `redo` | 重做 | `redo` |
@@ -102,14 +108,31 @@ mvn test -pl plugins/core-impl
 | `log-off [file]` | 关闭日志 | `log-off` |
 | `log-show [file]` | 显示日志 | `log-show` |
 
+### XML编辑命令
+
+| 命令 | 功能 | 示例 |
+|------|------|------|
+| `insert-before <tag> <newId> <targetId> ["text"]` | 在目标元素前插入元素 | `insert-before book newBook book1` |
+| `append-child <tag> <newId> <parentId> ["text"]` | 追加子元素 | `append-child price price4 book1 "29.99"` |
+| `edit-id <oldId> <newId>` | 修改元素ID | `edit-id book1 book001` |
+| `edit-text <elementId> ["text"]` | 修改元素文本 | `edit-text title1 "New Title"` |
+| `delete <elementId>` | 删除元素 | `delete book1` |
+| `xml-tree [file]` | 显示XML树形结构 | `xml-tree` / `xml-tree data.xml` |
+
+### 拼写检查命令
+
+| 命令 | 功能 | 示例 |
+|------|------|------|
+| `spell-check [file]` | 拼写检查 | `spell-check` / `spell-check test.txt` |
+
 ---
 
 ## 💡 使用示例
 
-### 示例 1: 创建并编辑文件
+### 示例 1: 创建并编辑文本文件
 ```bash
-> init hello.txt
-Created new buffer: hello.txt
+> init text
+Created new buffer: untitled.txt
 
 > append "Hello, World!"
 Appended line.
@@ -121,46 +144,217 @@ Appended line.
 1: Hello, World!
 2: Welcome to Team20 Editor
 
-> save
+> save hello.txt
 Saved: hello.txt
 ```
 
-### 示例 2: 启用日志记录
+### 示例 2: 创建并编辑XML文件
 ```bash
-> init log-test.txt with-log
-Created new buffer: log-test.txt (logging enabled)
+> init xml
+Created new buffer: untitled.xml
 
-> append "First line"
-Appended line.
+> xml-tree
+root [id="root"]
 
-> save
-Saved: log-test.txt
+> append-child book book1 root
+Appended child: book
 
-> log-show
-session start at 20251121 18:05:00
-20251121 18:05:05 append "First line"
-20251121 18:05:10 save
+> append-child title title1 book1 "My Book"
+Appended child: title
+
+> xml-tree
+root [id="root"]
+└── book [id="book1"]
+    └── title [id="title1"]
+        └── "My Book"
+
+> save books.xml
+Saved: books.xml
 ```
 
-### 示例 3: 多文件编辑
+### 示例 3: 编辑时长统计
 ```bash
 > load file1.txt
 Loaded: file1.txt
 
-> load file2.txt
-Loaded: file2.txt
+> load file2.xml
+Loaded: file2.xml
 
 > editor-list
-* file2.txt
-  file1.txt
+* file2.xml (45秒)
+  file1.txt (2分钟)
 
 > edit file1.txt
 Switched to: file1.txt
 
 > editor-list
-* file1.txt
-  file2.txt
+* file1.txt (2小时15分钟)
+  file2.xml (45秒)
 ```
+
+### 示例 4: 启用日志记录
+```bash
+> init text with-log
+Created new buffer: untitled.txt (logging enabled)
+
+> append "First line"
+Appended line.
+
+> save log-test.txt
+Saved: log-test.txt
+
+> log-show
+session start at 20251201 18:05:00
+20251201 18:05:05 append "First line"
+20251201 18:05:10 save
+```
+
+### 示例 5: 日志过滤功能
+```bash
+# 文件首行写入: # log -e append -e delete
+# 表示不记录该文件的 append 与 delete 命令日志
+```
+
+### 示例 6: 拼写检查
+```bash
+> load document.txt
+Loaded: document.txt
+
+> spell-check
+拼写检查结果:
+第1行，第5列: "recieve" -> 建议: receive
+第3行，第12列: "occured" -> 建议: occurred
+
+> load books.xml
+Loaded: books.xml
+
+> spell-check
+拼写检查结果:
+元素 title1: "Itallian" -> 建议: Italian
+元素 author2: "Rowlling" -> 建议: Rowling
+```
+
+### 示例 7: 多文件编辑
+```bash
+> load file1.txt
+Loaded: file1.txt
+
+> load file2.xml
+Loaded: file2.xml
+
+> editor-list
+* file2.xml (45秒)
+  file1.txt (30秒)
+
+> edit file1.txt
+Switched to: file1.txt
+
+> editor-list
+* file1.txt (1分钟)
+  file2.xml (45秒)
+```
+
+---
+
+## 📊 Lab2 新增模块说明
+
+### 1. XML编辑器 (XmlEditor)
+
+XML编辑器支持元素级编辑操作，将XML文件解析为树形结构（DOM树），并支持以下功能：
+
+**功能特性**:
+- 支持元素级编辑操作：`insert-before`、`append-child`、`edit-id`、`edit-text`、`delete`
+- 支持树形结构可视化输出 (`xml-tree`)
+- 支持拼写检查功能
+- 支持撤销/重做操作
+
+**数据结构**:
+- 解析XML文件为树形结构（DOM树）
+- 内部维护 `id -> element` 的映射以支持快速查找
+- 每个元素必须有唯一的 `id` 属性用于命令操作中的元素定位
+
+**XML文件示例**:
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<bookstore id="root">
+    <book id="book1" category="COOKING">
+        <title id="title1" lang="en">Everyday Italian</title>
+        <author id="author1">Giada De Laurentiis</author>
+        <year id="year1">2005</year>
+        <price id="price1">30.00</price>
+    </book>
+</bookstore>
+```
+
+### 2. 统计模块 (Statistics)
+
+统计模块记录每个文件在当前会话(Session)中的编辑时长，并以可读格式显示。
+
+**会话定义**:
+- 从程序启动到退出的一次完整运行周期
+- 每次启动程序开始新的会话，所有文件的编辑时长重置为0
+- 工作区状态恢复不会恢复编辑时长
+
+**时长计算规则**:
+- 开始计时：当文件成为活动文件时（通过 `load` 或 `edit` 命令）
+- 停止计时：当切换到其他文件、关闭文件或退出程序时
+- 累计时长：一个会话中，文件每次成为活动文件都会累计时长
+- 重置时长：文件关闭后，如果再次打开，时长重置为0
+
+**时长格式规范**:
+
+| 时长范围 | 显示格式 | 示例 |
+|---------|---------|------|
+| < 1分钟 | X秒 | `45秒` |
+| 1-59分钟 | X分钟 | `25分钟` |
+| 1-23小时 | X小时Y分钟 | `2小时15分钟` |
+| ≥ 24小时 | X天Y小时 | `1天3小时` |
+
+### 3. 拼写检查模块 (Spell Checking)
+
+拼写检查模块对编辑器中的文本内容进行拼写检查，并报告错误。
+
+**功能特性**:
+- 支持文本文件和XML文件的拼写检查
+- 对于文本文件：报告行号、列号和拼写建议
+- 对于XML文件：报告元素ID和拼写建议
+- 第三方库依赖被限制在适配器内，实现依赖隔离
+
+**输出格式示例**:
+
+文本文件:
+```
+拼写检查结果:
+第1行，第5列: "recieve" -> 建议: receive
+第3行，第12列: "occured" -> 建议: occurred
+```
+
+XML文件:
+```
+拼写检查结果:
+元素 title1: "Itallian" -> 建议: Italian
+元素 author2: "Rowlling" -> 建议: Rowling
+```
+
+### 4. 日志增强
+
+日志模块新增"按文件首行配置的日志过滤"能力。
+
+**语法规则**:
+- `# log`：启用该文件的日志记录（保持原有行为）
+- `# log -e <cmd> [-e <cmd> ...]`：排除指定命令的日志记录
+
+**示例**:
+```
+# log -e append -e delete
+```
+表示不记录该文件的 `append` 与 `delete` 命令日志。
+
+**行为说明**:
+- 过滤仅作用于该文件的日志记录
+- 适用于文本编辑命令与XML编辑命令
+- 未识别或不存在的命令名将被忽略，并在日志模块内以告警方式提示
+- 日志写入失败仅提示警告，不阻断编辑流程
 
 ---
 
@@ -277,7 +471,7 @@ build.bat run
 
 ## 📚 设计模式应用
 
-Lab1 应用了以下设计模式：
+### Lab1 应用的设计模式
 
 1. **命令模式 (Command Pattern)**: 实现可撤销/重做的编辑操作
 2. **备忘录模式 (Memento Pattern)**: 工作区状态的持久化和恢复
@@ -286,6 +480,15 @@ Lab1 应用了以下设计模式：
 5. **单例模式 (Singleton Pattern)**: 命令注册表和应用程序上下文
 6. **策略模式 (Strategy Pattern)**: 序列化和日志输出策略
 7. **适配器模式 (Adapter Pattern)**: 树形视图适配器
+
+### Lab2 新增应用的设计模式
+
+1. **组合模式 (Composite Pattern)**: 表示XML树形结构
+2. **装饰器模式 (Decorator Pattern)**: 
+   - 自动标记文件修改状态
+   - 在显示文件列表时为每个文件名添加时长信息
+3. **适配器模式 (Adapter Pattern)**: 拼写检查第三方库适配器，实现依赖隔离
+4. **观察者模式 (Observer Pattern)**: 监听文件切换事件，自动更新时长统计
 
 ---
 
