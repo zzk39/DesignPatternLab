@@ -189,7 +189,7 @@
 ### 4.1 项目模块结构
 
 ```
-text-editor-parent (聚合 POM)
+text-editor-parent (Aggregator POM)
 ├── core                    # 核心模块 (SPI, 域模型, 平台代码)
 ├── plugins/
 │   ├── core-impl          # 核心实现插件 (文本编辑器, 工作区命令, 日志命令)

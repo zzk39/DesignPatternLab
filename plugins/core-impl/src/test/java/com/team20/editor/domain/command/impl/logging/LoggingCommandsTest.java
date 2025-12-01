@@ -4,12 +4,11 @@ import com.team20.editor.domain.editor.Editor;
 import com.team20.editor.domain.workspace.Workspace;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.io.TempDir;
+import org.junit.jupiter.api.AfterEach;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
-import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -39,10 +38,12 @@ public class LoggingCommandsTest {
         System.setOut(new PrintStream(outContent));
     }
 
+    @AfterEach
     void tearDown() {
         System.setOut(originalOut);
         // 清理日志文件
         new File(".test.txt.log").delete();
+        new File(".specific.txt.log").delete();
     }
 
     // =========== LogOnCommand 测试 ===========
@@ -54,7 +55,6 @@ public class LoggingCommandsTest {
 
         assertTrue(workspace.isLoggingEnabled("test.txt"));
         assertTrue(outContent.toString().contains("日志已启用"));
-        tearDown();
     }
 
     @Test
@@ -65,8 +65,6 @@ public class LoggingCommandsTest {
         
         // 由于 specific.txt 不在 workspace 中，但命令仍会尝试启用它
         assertTrue(outContent.toString().contains("日志已启用"));
-        tearDown();
-        new File(".specific.txt.log").delete();
     }
 
     @Test
@@ -76,7 +74,6 @@ public class LoggingCommandsTest {
         cmd.execute(emptyWorkspace);
 
         assertTrue(outContent.toString().contains("没有打开的文件"));
-        tearDown();
     }
 
     @Test
@@ -101,7 +98,6 @@ public class LoggingCommandsTest {
 
         assertFalse(workspace.isLoggingEnabled("test.txt"));
         assertTrue(outContent.toString().contains("日志已禁用"));
-        tearDown();
     }
 
     @Test
@@ -112,7 +108,6 @@ public class LoggingCommandsTest {
         cmd.execute(workspace);
 
         assertFalse(workspace.isLoggingEnabled("test.txt"));
-        tearDown();
     }
 
     @Test
@@ -122,7 +117,6 @@ public class LoggingCommandsTest {
         cmd.execute(emptyWorkspace);
 
         assertTrue(outContent.toString().contains("没有打开的文件"));
-        tearDown();
     }
 
     @Test
@@ -142,7 +136,6 @@ public class LoggingCommandsTest {
         cmd.execute(workspace);
 
         assertTrue(outContent.toString().contains("未找到日志文件"));
-        tearDown();
     }
 
     @Test
@@ -152,7 +145,6 @@ public class LoggingCommandsTest {
         cmd.execute(emptyWorkspace);
 
         assertTrue(outContent.toString().contains("没有打开的文件"));
-        tearDown();
     }
 
     @Test
@@ -165,7 +157,7 @@ public class LoggingCommandsTest {
     }
 
     @Test
-    void testLogShowAfterLogOn() throws Exception {
+    void testLogShowAfterLogOn() {
         // 先启用日志，创建日志文件
         LogOnCommand logOn = new LogOnCommand();
         logOn.execute(workspace);
@@ -179,7 +171,6 @@ public class LoggingCommandsTest {
 
         String output = outContent.toString();
         assertTrue(output.contains("session start at"));
-        tearDown();
     }
 
     // =========== 边界情况测试 ===========
@@ -196,7 +187,6 @@ public class LoggingCommandsTest {
 
         assertTrue(workspace.isLoggingEnabled("test.txt"));
         assertTrue(outContent.toString().contains("日志已启用"));
-        tearDown();
     }
 
     @Test
@@ -207,7 +197,6 @@ public class LoggingCommandsTest {
         cmd.execute(workspace);
 
         assertFalse(workspace.isLoggingEnabled("test.txt"));
-        tearDown();
     }
 
     @Test
@@ -231,6 +220,5 @@ public class LoggingCommandsTest {
         assertNotNull(logOn1);
         assertNotNull(logOff1);
         assertNotNull(logShow1);
-        tearDown();
     }
 }

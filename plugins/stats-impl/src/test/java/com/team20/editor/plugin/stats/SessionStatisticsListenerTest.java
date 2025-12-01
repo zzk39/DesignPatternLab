@@ -72,11 +72,12 @@ public class SessionStatisticsListenerTest {
     // =========== resetDuration 测试 ===========
 
     @Test
-    void testResetDuration() throws InterruptedException {
+    void testResetDuration() {
+        // Start and stop tracking to accumulate some duration
         listener.startTracking("test.txt");
-        Thread.sleep(100);
         listener.stopTracking("test.txt");
         
+        // Reset should clear accumulated duration
         listener.resetDuration("test.txt");
         
         assertEquals(0, listener.getDurationSeconds("test.txt"));
@@ -185,18 +186,16 @@ public class SessionStatisticsListenerTest {
     // =========== 切换文件测试 ===========
 
     @Test
-    void testSwitchFiles() throws InterruptedException {
+    void testSwitchFiles() {
         // 开始追踪文件1
         listener.startTracking("file1.txt");
-        Thread.sleep(100);
         
-        // 切换到文件2
+        // 切换到文件2 - 这应该停止file1的追踪并开始file2的追踪
         listener.startTracking("file2.txt");
-        Thread.sleep(100);
         
         listener.stopTracking("file2.txt");
         
-        // 两个文件都应该有记录的时长
+        // 两个文件都应该有记录（可能是0秒，但不应该是负数）
         assertTrue(listener.getDurationSeconds("file1.txt") >= 0);
         assertTrue(listener.getDurationSeconds("file2.txt") >= 0);
     }
@@ -204,22 +203,20 @@ public class SessionStatisticsListenerTest {
     // =========== 累积时长测试 ===========
 
     @Test
-    void testAccumulatedDuration() throws InterruptedException {
+    void testAccumulatedDuration() {
         // 第一次追踪
         listener.startTracking("test.txt");
-        Thread.sleep(100);
         listener.stopTracking("test.txt");
         
         long firstDuration = listener.getDurationSeconds("test.txt");
         
         // 第二次追踪同一文件
         listener.startTracking("test.txt");
-        Thread.sleep(100);
         listener.stopTracking("test.txt");
         
         long totalDuration = listener.getDurationSeconds("test.txt");
         
-        // 总时长应该大于等于第一次时长
+        // 总时长应该大于等于第一次时长（累积逻辑测试）
         assertTrue(totalDuration >= firstDuration);
     }
 }

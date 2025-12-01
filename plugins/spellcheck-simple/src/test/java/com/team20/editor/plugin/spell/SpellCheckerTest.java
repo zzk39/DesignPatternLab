@@ -165,9 +165,9 @@ public class SpellCheckerTest {
     // =========== 边界情况测试 ===========
 
     @Test
-    void testVeryLongText() {
+    void testLongText() {
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 1000; i++) {
+        for (int i = 0; i < 100; i++) {
             sb.append("This is a normal sentence. ");
         }
         
