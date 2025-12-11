@@ -1,8 +1,0 @@
-com/team20/editor/plugin/xml/command/XmlEditTextCommand.class
-com/team20/editor/domain/editor/xml/XmlEditorProvider.class
-com/team20/editor/plugin/xml/command/XmlInsertBeforeCommand.class
-com/team20/editor/plugin/xml/command/XmlEditIdCommand.class
-com/team20/editor/domain/editor/xml/XmlEditor.class
-com/team20/editor/plugin/xml/XmlCommandProvider.class
-com/team20/editor/plugin/xml/command/XmlAppendChildCommand.class
-com/team20/editor/plugin/xml/command/XmlDeleteCommand.class
