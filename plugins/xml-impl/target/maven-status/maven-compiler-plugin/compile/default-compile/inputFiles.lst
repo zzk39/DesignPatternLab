@@ -1,0 +1,8 @@
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/XmlCommandProvider.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/command/XmlInsertBeforeCommand.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/command/XmlAppendChildCommand.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/command/XmlEditIdCommand.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/command/XmlDeleteCommand.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/plugin/xml/command/XmlEditTextCommand.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/domain/editor/xml/XmlEditorProvider.java
+/workspace/plugins/xml-impl/src/main/java/com/team20/editor/domain/editor/xml/XmlEditor.java
