@@ -1,0 +1,474 @@
+@startuml 快递物流管理系统领域模型
+
+' 样式设置
+skinparam classAttributeIconSize 0
+skinparam class {
+    BackgroundColor<<ValueObject>> LightYellow
+    BackgroundColor<<Entity>> LightBlue
+    BackgroundColor<<Aggregate>> LightGreen
+    BorderColor Black
+    ArrowColor Black
+}
+
+' ============= 包裹管理领域 =============
+package "包裹管理领域" <<Rectangle>> {
+    class Package <<Entity>> {
+        - packageId: String
+        - waybillNumber: String
+        - weight: BigDecimal
+        - length: BigDecimal
+        - width: BigDecimal
+        - height: BigDecimal
+        - currentStatus: PackageStatus
+        - currentLocation: Location
+        - estimatedArrivalTime: LocalDateTime
+        --
+        + updateStatus(status: PackageStatus): void
+        + addTrace(trace: PackageTrace): void
+        + getTraceHistory(): List<PackageTrace>
+        + markAsException(reason: String): void
+        + getCurrentLocation(): Location
+        + getNextStation(): Station
+    }
+    
+    class Waybill <<Entity>> {
+        - waybillNumber: String
+        - senderInfo: Customer
+        - recipientInfo: Customer
+        - originSite: Site
+        - destinationSite: Site
+        - declaredValue: BigDecimal
+        - createdTime: LocalDateTime
+        - packageId: String
+        --
+        + validate(): boolean
+        + print(): void
+        + getSenderAddress(): Address
+        + getRecipientAddress(): Address
+    }
+    
+    class PackageTrace <<Entity>> {
+        - traceId: String
+        - packageId: String
+        - location: Location
+        - status: PackageStatus
+        - timestamp: LocalDateTime
+        - operator: String
+        - operatorType: String
+        - description: String
+        --
+        + getLocationName(): String
+        + getStatusDescription(): String
+    }
+    
+    enum PackageStatus {
+        COLLECTED
+        SORTING
+        IN_TRANSIT
+        ARRIVED_AT_TRANSFER
+        OUT_FOR_DELIVERY
+        DELIVERED
+        EXCEPTION
+        RETURNED
+    }
+    
+    class Location <<ValueObject>> {
+        - locationId: String
+        - locationType: LocationType
+        - locationName: String
+        - address: Address
+        - coordinates: Coordinates
+        --
+        + getFullName(): String
+        + distanceTo(other: Location): double
+    }
+    
+    enum LocationType {
+        SITE
+        TRANSFER_STATION
+        VEHICLE
+        OTHER
+    }
+}
+
+' ============= 客户管理领域 =============
+package "客户管理领域" <<Rectangle>> {
+    class Customer <<Entity>> {
+        - customerId: String
+        - name: String
+        - phoneNumber: String
+        - address: Address
+        - customerType: CustomerType
+        --
+        + createWaybill(recipient: Customer, packageInfo: PackageInfo): Waybill
+        + queryPackageStatus(waybillNumber: String): Package
+        + updateContactInfo(phone: String, address: Address): void
+    }
+    
+    enum CustomerType {
+        SENDER
+        RECIPIENT
+        BOTH
+    }
+    
+    class Address <<ValueObject>> {
+        - province: String
+        - city: String
+        - district: String
+        - street: String
+        - detailAddress: String
+        - postalCode: String
+        --
+        + validateAddress(): boolean
+        + getFullAddress(): String
+        + isSameCity(other: Address): boolean
+    }
+}
+
+' ============= 网点与站点领域 =============
+package "网点与站点领域" <<Rectangle>> {
+    abstract class Station {
+        - stationId: String
+        - stationName: String
+        - address: Address
+        - location: Location
+        - capacity: int
+        - currentLoad: int
+        --
+        + acceptPackage(package: Package): void
+        + checkCapacity(): boolean
+    }
+    
+    class Site <<Entity>> {
+        - siteType: SiteType
+        - operatingHours: String
+        - contactPhone: String
+        --
+        + acceptPackage(package: Package): void
+        + sortPackage(package: Package): void
+        + assignDeliveryTask(packages: List<Package>): DeliveryTask
+        + printWaybill(waybill: Waybill): void
+    }
+    
+    class TransferStation <<Entity>> {
+        - sortingCapacity: int
+        - sortingRules: SortingRule
+        - connectedStations: List<Station>
+        --
+        + sortPackages(packages: List<Package>): Map<Station, List<Package>>
+        + generateTransportTasks(): List<TransportTask>
+        + applySortingRule(package: Package): Station
+    }
+    
+    enum SiteType {
+        SERVICE_SITE
+        SORTING_CENTER
+        WAREHOUSE
+    }
+    
+    class SortingRule <<ValueObject>> {
+        - ruleId: String
+        - ruleName: String
+        - priority: int
+        --
+        + determineNextStation(package: Package): Station
+        + validate(): boolean
+    }
+}
+
+' ============= 运输调度领域 =============
+package "运输调度领域" <<Rectangle>> {
+    class RoutePlan <<Entity>> {
+        - routeId: String
+        - origin: Location
+        - destination: Location
+        - intermediateStations: List<Station>
+        - estimatedTime: Duration
+        - distance: BigDecimal
+        - planType: PlanType
+        --
+        + calculateRoute(): void
+        + updateRoute(newStations: List<Station>): void
+        + getNextStation(currentStation: Station): Station
+        + estimateArrivalTime(currentStation: Station): LocalDateTime
+    }
+    
+    enum PlanType {
+        SHORTEST_PATH
+        FASTEST_PATH
+        COST_OPTIMAL
+    }
+    
+    class TransportTask <<Aggregate>> {
+        - taskId: String
+        - packageList: List<String>
+        - packageCount: int
+        - originStation: Station
+        - destinationStation: Station
+        - assignedVehicle: Vehicle
+        - assignedDriver: Driver
+        - plannedRoute: RoutePlan
+        - taskStatus: TaskStatus
+        - scheduledTime: LocalDateTime
+        - actualDepartureTime: LocalDateTime
+        - actualArrivalTime: LocalDateTime
+        --
+        + assignVehicleAndDriver(vehicle: Vehicle, driver: Driver): void
+        + addPackage(packageId: String): void
+        + startTransport(): void
+        + completeTransport(): void
+        + handleRouteChange(newRoute: RoutePlan): void
+        + getLoadRate(): double
+    }
+    
+    enum TaskStatus {
+        PENDING
+        ASSIGNED
+        IN_PROGRESS
+        COMPLETED
+        CANCELLED
+    }
+    
+    class Vehicle <<Entity>> {
+        - vehicleId: String
+        - vehicleNumber: String
+        - vehicleType: VehicleType
+        - capacity: BigDecimal
+        - maxVolume: BigDecimal
+        - currentStatus: VehicleStatus
+        - maintenanceDate: LocalDate
+        --
+        + checkAvailability(): boolean
+        + calculateLoadRate(packages: List<Package>): double
+        + updateStatus(status: VehicleStatus): void
+    }
+    
+    enum VehicleType {
+        SMALL_VAN
+        MEDIUM_TRUCK
+        LARGE_TRUCK
+        ELECTRIC_VEHICLE
+    }
+    
+    enum VehicleStatus {
+        AVAILABLE
+        IN_USE
+        MAINTENANCE
+        BREAKDOWN
+    }
+    
+    class Driver <<Entity>> {
+        - driverId: String
+        - name: String
+        - phoneNumber: String
+        - licenseNumber: String
+        - licenseType: String
+        - currentStatus: DriverStatus
+        - currentTask: String
+        --
+        + viewTransportTask(): List<TransportTask>
+        + startTask(taskId: String): void
+        + completeTask(taskId: String): void
+        + reportRouteChange(reason: String): void
+        + updateStatus(status: DriverStatus): void
+    }
+    
+    enum DriverStatus {
+        AVAILABLE
+        ON_DUTY
+        OFF_DUTY
+        ON_LEAVE
+    }
+}
+
+' ============= 派送领域 =============
+package "派送领域" <<Rectangle>> {
+    class DeliveryTask <<Aggregate>> {
+        - taskId: String
+        - packageList: List<String>
+        - assignedCourier: Courier
+        - deliveryArea: String
+        - taskStatus: TaskStatus
+        - scheduledDate: LocalDate
+        - completedCount: int
+        - totalCount: int
+        --
+        + assignCourier(courier: Courier): void
+        + addPackage(packageId: String): void
+        + optimizeDeliveryRoute(): List<Package>
+        + completeDelivery(packageId: String): void
+        + getProgress(): double
+    }
+    
+    class Courier <<Entity>> {
+        - courierId: String
+        - name: String
+        - phoneNumber: String
+        - assignedArea: String
+        - currentStatus: CourierStatus
+        - vehicleType: String
+        - currentTask: String
+        --
+        + viewDeliveryTasks(): List<DeliveryTask>
+        + deliverPackage(packageId: String): void
+        + confirmSignature(packageId: String, signature: SignatureRecord): void
+        + reportException(packageId: String, reason: String): ExceptionRecord
+        + updateStatus(status: CourierStatus): void
+    }
+    
+    enum CourierStatus {
+        AVAILABLE
+        DELIVERING
+        RETURNING
+        OFF_DUTY
+    }
+    
+    class SignatureRecord <<Entity>> {
+        - recordId: String
+        - packageId: String
+        - waybillNumber: String
+        - signatureTime: LocalDateTime
+        - signaturePerson: String
+        - relationToRecipient: String
+        - signatureImage: String
+        - courierId: String
+        - deliveryTaskId: String
+        --
+        + validate(): boolean
+        + getImageUrl(): String
+    }
+}
+
+' ============= 异常处理领域 =============
+package "异常处理领域" <<Rectangle>> {
+    class ExceptionRecord <<Entity>> {
+        - exceptionId: String
+        - packageId: String
+        - exceptionType: ExceptionType
+        - exceptionReason: String
+        - reportTime: LocalDateTime
+        - reportPerson: String
+        - reportPersonRole: String
+        - handlingStatus: HandlingStatus
+        - assignedHandler: String
+        - resolutionPlan: String
+        - resolvedTime: LocalDateTime
+        - resolutionNote: String
+        --
+        + createException(): void
+        + assignHandler(handlerId: String): void
+        + resolveException(solution: String): void
+        + notifyCustomer(message: String): void
+        + escalate(): void
+    }
+    
+    enum ExceptionType {
+        SORTING_EXCEPTION
+        TRANSPORT_EXCEPTION
+        DELIVERY_EXCEPTION
+        PACKAGE_DAMAGE
+        ADDRESS_ERROR
+        RECIPIENT_UNAVAILABLE
+        WEATHER_DELAY
+        TRAFFIC_DELAY
+        OTHER
+    }
+    
+    enum HandlingStatus {
+        REPORTED
+        ASSIGNED
+        IN_PROGRESS
+        RESOLVED
+        ESCALATED
+    }
+}
+
+' ============= 关系定义 =============
+
+' 包裹相关关系
+Package "1" -- "1" Waybill : 对应 >
+Package "1" *-- "many" PackageTrace : 包含 >
+Package "1" -- "0..*" ExceptionRecord : 可能有 >
+Package -- PackageStatus
+Package -- Location
+
+' 运单关系
+Waybill "many" -- "1" Customer : 寄件人 <
+Waybill "many" -- "1" Customer : 收件人 <
+Waybill -- Site : 寄件网点 <
+Waybill -- Site : 目的网点 <
+
+' 客户和地址关系
+Customer -- Address
+Customer -- CustomerType
+
+' 站点关系
+Station <|-- Site
+Station <|-- TransferStation
+Site -- SiteType
+TransferStation -- SortingRule
+Station -- Location
+Station -- Address
+
+' 运输任务关系
+TransportTask "many" o-- "many" Package : 包含 >
+TransportTask "many" -- "1" Vehicle : 分配 >
+TransportTask "many" -- "1" Driver : 分配 >
+TransportTask "many" -- "1" RoutePlan : 使用 >
+TransportTask -- Station : 起点/终点
+TransportTask -- TaskStatus
+
+RoutePlan -- Location
+RoutePlan -- Station
+RoutePlan -- PlanType
+
+Vehicle -- VehicleType
+Vehicle -- VehicleStatus
+
+Driver -- DriverStatus
+
+' 派送任务关系
+DeliveryTask "many" o-- "many" Package : 包含 >
+DeliveryTask "many" -- "1" Courier : 分配 >
+DeliveryTask -- TaskStatus
+
+SignatureRecord "many" -- "1" Package : 对应 >
+SignatureRecord "many" -- "1" Courier : 执行 >
+SignatureRecord "many" -- "1" DeliveryTask : 属于 >
+
+Courier -- CourierStatus
+
+' 异常关系
+ExceptionRecord "many" -- "1" Package : 关联 >
+ExceptionRecord -- ExceptionType
+ExceptionRecord -- HandlingStatus
+
+' 轨迹和位置关系
+PackageTrace -- Location
+Location -- LocationType
+Location -- Address
+
+' 注释
+note top of Package
+  包裹是系统的核心实体，
+  承载了整个业务流程
+end note
+
+note top of TransportTask
+  运输任务是运输调度的聚合根，
+  管理一次运输的完整生命周期
+end note
+
+note top of DeliveryTask
+  派送任务是派送领域的聚合根，
+  管理末端派送的完整流程
+end note
+
+note top of ExceptionRecord
+  统一的异常处理机制，
+  支持所有类型的异常场景
+end note
+
+@enduml
+
+

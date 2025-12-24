@@ -1,0 +1,325 @@
+@startuml 快递物流管理系统时序图
+
+' ============= 正常流程：包裹从揽收到签收 =============
+@startuml 流程1-包裹揽收到派送全流程
+title 包裹从揽收到签收的完整流程
+
+actor 客户 as Customer
+participant 网点 as Site
+participant 包裹 as Package
+participant 运单 as Waybill
+participant 路径规划 as RoutePlan
+participant 运输任务 as TransportTask
+participant 司机 as Driver
+participant 车辆 as Vehicle
+participant 中转站 as TransferStation
+participant 派送任务 as DeliveryTask
+participant 派送员 as Courier
+participant 签收记录 as SignatureRecord
+
+Customer -> Site: 寄送包裹
+Site -> Waybill: 录入运单信息(收件人、地址、重量等)
+Site -> Waybill: 打印运单号
+Site -> Package: 创建包裹对象
+Package -> Package: 状态=已揽收(COLLECTED)
+
+Site -> RoutePlan: 根据目的地进行路径规划
+RoutePlan -> RoutePlan: 计算最优路径
+RoutePlan --> Site: 返回路径(包含中转站列表)
+
+Site -> Package: 根据路径确定下一站
+Site -> Package: 进行分拣，状态=分拣中(SORTING)
+Site -> TransportTask: 生成运输任务
+TransportTask -> TransportTask: 添加包裹列表
+
+group 运输调度
+    Site -> TransportTask: 分配车辆和司机
+    TransportTask -> Vehicle: 检查可用性
+    Vehicle --> TransportTask: 可用
+    TransportTask -> Driver: 分配任务
+    Driver -> TransportTask: 查看运输任务详情
+end
+
+Driver -> TransportTask: 开始运输
+TransportTask -> Package: 状态=运输中(IN_TRANSIT)
+Package -> Package: 添加轨迹记录
+
+Driver -> TransferStation: 到达中转站
+TransferStation -> Package: 状态=到达中转(ARRIVED_AT_TRANSFER)
+Package -> Package: 添加轨迹记录
+
+TransferStation -> Package: 根据分拣规则分拣
+TransferStation -> Package: 确定下一站
+TransferStation -> TransportTask: 生成新的运输任务
+
+note right
+  如果还有中转站，
+  重复运输流程
+end note
+
+Driver -> Site: 到达目的网点
+Site -> Package: 状态=到达网点
+Package -> Package: 添加轨迹记录
+
+Site -> DeliveryTask: 创建派送任务
+DeliveryTask -> Courier: 分配派送员
+Courier -> DeliveryTask: 查看派送任务列表
+Courier -> Package: 查看包裹详细信息(收件人、地址、电话)
+
+Courier -> Courier: 根据建议路线进行派送
+Courier -> Package: 状态=派送中(OUT_FOR_DELIVERY)
+Package -> Package: 添加轨迹记录
+
+Courier -> Customer: 联系收件人并派送
+Customer -> Courier: 确认签收
+Courier -> SignatureRecord: 创建签收记录(签收时间、签收人、照片)
+Courier -> Package: 状态=已签收(DELIVERED)
+Package -> Package: 添加轨迹记录
+
+@enduml
+
+' ============= 扩展流程1：包裹分拣异常 =============
+@startuml 流程2-包裹分拣异常处理
+title 包裹分拣异常处理流程
+
+participant 网点 as Site
+participant 包裹 as Package
+participant 异常记录 as ExceptionRecord
+participant 运单 as Waybill
+participant 客户 as Customer
+participant 处理人员 as Handler
+
+Site -> Package: 进行分拣
+Site -> Site: 发现地址不清晰/标签损坏
+
+Site -> ExceptionRecord: 创建异常记录
+ExceptionRecord -> ExceptionRecord: 类型=分拣异常(SORTING_EXCEPTION)
+ExceptionRecord -> ExceptionRecord: 状态=已报告(REPORTED)
+
+Site -> Package: 状态=异常(EXCEPTION)
+Package -> Package: 添加轨迹记录
+
+ExceptionRecord -> Handler: 分配处理人
+ExceptionRecord -> ExceptionRecord: 状态=已分配(ASSIGNED)
+
+Handler -> Waybill: 查看运单信息
+Handler -> Customer: 联系发件人确认地址
+Customer --> Handler: 提供正确信息
+
+Handler -> Waybill: 更新运单信息
+Handler -> Package: 更新包裹信息
+Handler -> ExceptionRecord: 记录解决方案
+ExceptionRecord -> ExceptionRecord: 状态=已解决(RESOLVED)
+
+Handler -> Package: 恢复正常状态
+Package -> Package: 状态=分拣中(SORTING)
+Site -> Package: 继续正常流程
+
+@enduml
+
+' ============= 扩展流程2：运输路线变更 =============
+@startuml 流程3-运输路线变更
+title 运输路线变更处理流程
+
+participant 司机 as Driver
+participant 运输任务 as TransportTask
+participant 路径规划 as RoutePlan
+participant 调度员 as Dispatcher
+participant 包裹 as Package
+participant 网点 as Site
+
+Driver -> Driver: 发现路况异常(天气/交通管制/道路封闭)
+Driver -> TransportTask: 报告路线变更需求
+
+TransportTask -> Dispatcher: 通知需要重新规划
+Dispatcher -> RoutePlan: 更新路径规划
+RoutePlan -> RoutePlan: 重新计算路线
+RoutePlan --> Dispatcher: 返回新路径
+
+Dispatcher -> TransportTask: 更新运输任务(新路线、新预计时间)
+TransportTask -> Driver: 通知新路线
+
+Driver -> Package: 更新预计到达时间
+Package -> Package: 添加轨迹记录(路线变更)
+
+TransportTask -> Site: 通知下游网点时间变更
+Site -> Site: 调整接收准备
+
+note right of Driver
+  司机按照新路线继续运输
+end note
+
+@enduml
+
+' ============= 扩展流程3：派送异常处理 =============
+@startuml 流程4-派送异常处理
+title 派送异常处理流程
+
+participant 派送员 as Courier
+participant 包裹 as Package
+participant 异常记录 as ExceptionRecord
+participant 客户 as Customer
+participant 派送任务 as DeliveryTask
+participant 网点 as Site
+
+Courier -> Customer: 尝试派送
+Customer -> Courier: 收件人不在家/地址错误/包裹破损
+
+Courier -> ExceptionRecord: 创建异常记录
+ExceptionRecord -> ExceptionRecord: 类型=派送异常(DELIVERY_EXCEPTION)
+ExceptionRecord -> ExceptionRecord: 记录具体原因
+
+Courier -> Package: 状态=派送异常
+Package -> Package: 添加轨迹记录
+
+ExceptionRecord -> Customer: 通知客户异常情况
+
+alt 收件人不在家
+    Customer -> ExceptionRecord: 预约二次派送时间
+    ExceptionRecord -> DeliveryTask: 创建新的派送任务
+    DeliveryTask -> Courier: 分配二次派送
+    Courier -> Customer: 按约定时间派送
+    
+else 地址错误
+    Customer -> ExceptionRecord: 提供正确地址
+    ExceptionRecord -> Package: 更新收件地址
+    ExceptionRecord -> DeliveryTask: 重新派送
+    Courier -> Customer: 按新地址派送
+    
+else 包裹破损
+    Customer -> ExceptionRecord: 拒收
+    ExceptionRecord -> Package: 标记退回
+    Courier -> Site: 退回包裹
+    Site -> ExceptionRecord: 启动赔偿流程
+end
+
+ExceptionRecord -> ExceptionRecord: 状态=已解决(RESOLVED)
+
+@enduml
+
+' ============= 查询流程：包裹状态追溯 =============
+@startuml 流程5-包裹状态查询与追溯
+title 包裹状态管理与追溯
+
+actor 客户 as Customer
+participant 系统 as System
+participant 包裹 as Package
+participant 包裹轨迹 as PackageTrace
+participant 路径规划 as RoutePlan
+
+Customer -> System: 输入运单号查询
+System -> Package: 根据运单号获取包裹
+
+System -> Package: 获取当前状态
+Package --> System: 返回：运输中(IN_TRANSIT)
+
+System -> Package: 获取当前位置
+Package --> System: 返回：上海分拣中心
+
+System -> Package: 获取历史轨迹
+Package -> PackageTrace: 查询所有轨迹记录
+PackageTrace --> Package: 返回轨迹列表
+Package --> System: 返回：揽收→分拣→中转
+
+System -> RoutePlan: 获取下一站信息
+RoutePlan --> System: 返回：杨浦中转站
+
+System -> Package: 获取预计到达时间
+Package --> System: 返回：2025-12-22 10:00
+
+System --> Customer: 显示完整信息
+note right
+  - 当前状态：运输中
+  - 当前位置：上海分拣中心
+  - 历史轨迹：揽收→分拣→中转
+  - 下一站：杨浦中转站
+  - 预计到达：2025-12-22 10:00
+end note
+
+@enduml
+
+' ============= 查询流程：司机查看运输任务 =============
+@startuml 流程6-司机查看运输任务
+title 运输调度与任务管理
+
+actor 司机 as Driver
+participant 系统 as System
+participant 运输任务 as TransportTask
+participant 路径规划 as RoutePlan
+participant 包裹 as Package
+
+Driver -> System: 查询当日运输任务
+System -> TransportTask: 获取司机的任务列表
+TransportTask --> System: 返回任务列表
+
+System --> Driver: 显示任务列表
+
+Driver -> System: 选择查看"沪-京运输任务"详情
+System -> TransportTask: 获取任务详情
+
+TransportTask -> RoutePlan: 获取路线规划详情
+RoutePlan --> TransportTask: 返回：上海→北京
+
+TransportTask -> Package: 统计包裹数量
+Package --> TransportTask: 返回：85件
+
+System --> Driver: 显示任务详情
+note right
+  任务名称：沪-京运输任务
+  路线：上海→北京
+  装载包裹：85件
+  预计发车时间：08:00
+  预计到达时间：次日10:00
+  车辆：京A12345
+end note
+
+@enduml
+
+' ============= 查询流程：派送员查看派送任务 =============
+@startuml 流程7-派送员查看派送任务
+title 派送任务执行支持
+
+actor 派送员 as Courier
+participant 系统 as System
+participant 派送任务 as DeliveryTask
+participant 包裹 as Package
+participant 运单 as Waybill
+
+Courier -> System: 查询派送任务队列
+System -> DeliveryTask: 获取派送员的任务
+DeliveryTask --> System: 返回任务列表
+
+System --> Courier: 显示：朝阳区派送任务(10个包裹)
+
+Courier -> System: 查看任务详情
+System -> DeliveryTask: 获取包裹列表
+
+loop 遍历每个包裹
+    DeliveryTask -> Package: 获取包裹信息
+    Package -> Waybill: 获取运单信息
+    Waybill --> Package: 返回收件人信息
+    Package --> DeliveryTask: 返回完整信息
+end
+
+System -> DeliveryTask: 优化派送路线
+DeliveryTask --> System: 返回建议派送顺序
+
+System --> Courier: 显示派送任务详情
+note right
+  任务：朝阳区派送任务
+  包裹数量：10件
+  
+  每个包裹显示：
+  - 包裹状态：派送中
+  - 收件人：张三
+  - 地址：北京市朝阳区xxx
+  - 联系电话：138xxxx1234
+  - 建议派送顺序：1-10
+  - 路线建议：(地图显示)
+end note
+
+@enduml
+
+@enduml
+
+
